@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>resolutionData</key>
+	<dict>
+		<key>userIconName</key>
+		<real>525479256.95235401</real>
+	</dict>
+	<key>storeFormatVersion</key>
+	<integer>1</integer>
+	<key>userIconName</key>
+	<string>Github</string>
+	<key>versioning</key>
+	<dict>
+		<key>userIconName</key>
+		<dict>
+			<key>38045419694695bf4d7727884f4724c4e7f80eb7308e70cd0d44888285b682b0</key>
+			<integer>15</integer>
+		</dict>
+	</dict>
+</dict>
+</plist>

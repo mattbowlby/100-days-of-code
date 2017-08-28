@@ -10,7 +10,7 @@
   
 **Link to work:** Basic Front End Development Project: a tribute page to [Kirby Puckett][3].  
   
-\----  
+----   
 
 ### Day 02: 13 August 2017  
 
@@ -162,7 +162,7 @@ I am gaining confidence with the terminal just by pure exposure. Installing Oh-M
 **Link to work:** 
 For the moment I'll be working with three main repos:  
 
-* [Matt's freeCodeCamp Course Site][37]: site to log my progress, excercise solutions and projects;
+* [Matt's freeCodeCamp Course Site][37]: site to log my progress, exercise solutions and projects;
 
  ![Matt's freeCodeCamp Course Site][image-1]
 
@@ -171,14 +171,23 @@ For the moment I'll be working with three main repos:
 ### Day 16: 27 August 2017  
 
 **Today's Progress:**  
- 
+ Continued work on the basic algorithm challenges at [freeCodeCamp][38]. Got a better understanding of for each loops.
+
+**Thoughts:**  
+One of the algorithm challenges required using a for each loop nested inside another for each loop. After solving three challenges, I found some wonderful posts by [@SonyaMoisset][39] on [Medium][40] breaking down the basic algorithm challenges and different ways to solve each problem. It is extremely helpful to read and understand a solution from through through the eyes of an experienced coder and to see alternative solutions to a problem.
+
+**Link to work:** 
+
+---- 
+
+### Day 17: 28 August 2017  
+
+**Today's Progress:**  
 
 **Thoughts:**  
 
 **Link to work:** 
 
-
----- 
 
 [1]:	https://codepen.io/mattbowlby/pen/yoovxQ "FCC Project: Tribute Page (Codepen)"
 [2]:	https://freecodecamp.com "Free Code Camp"
@@ -217,5 +226,8 @@ For the moment I'll be working with three main repos:
 [35]:	https://javascript30.com "JavaScript30: 30 Day Vanilla JS Coding Challenge"
 [36]:	https://mattbowlby.github.io/freeCodeCamp/ "Matt's freeCodeCamp Course Site"
 [37]:	https://mattbowlby.github.io/freeCodeCamp/ "Matt's freeCodeCamp Course Site"
+[38]:	https://www.freecodecamp.org "freeCodeCamp"
+[39]:	https://twitter.com/SonyaMoisset "@SonyaMoisset on Twitter"
+[40]:	https://medium.freecodecamp.org/@sonya.moisset "freeCodeCamp Blog for @SonyaMoisset"
 
 [image-1]:	https://user-images.githubusercontent.com/3312280/29745498-4ecc5b9a-8abc-11e7-8f48-f7a087650650.png "Matt's freeCodeCamp Course Site"
