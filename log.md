@@ -183,11 +183,24 @@ One of the algorithm challenges required using a for each loop nested inside ano
 ### Day 17: 28 August 2017  
 
 **Today's Progress:**  
+Watched sample coding interviews on YouTube.
 
 **Thoughts:**  
+It was very interesting to watch the sample coding interview. It came across to me as a wonderful intellectual exercise where you work out a solution to a problem under pressure and on the spot. It also struck me that there really is no way to fake your way through it. You really must have both the raw fundamental skills and have developed the ability to think through problems with the mindset of a programmer and problem solver. There are also likely many answers to a problem. The challenge is to find an ever more simple and efficient solution.
 
 **Link to work:** 
 
+---- 
+
+### Day 18: 29 August 2017  
+
+**Today's Progress:**  
+
+
+**Thoughts:**  
+
+
+**Link to work:** 
 
 [1]:	https://codepen.io/mattbowlby/pen/yoovxQ "FCC Project: Tribute Page (Codepen)"
 [2]:	https://freecodecamp.com "Free Code Camp"
