@@ -10,7 +10,7 @@
   
 **Link to work:** Basic Front End Development Project: a tribute page to [Kirby Puckett][3].  
   
-----   
+\----  
 
 ### Day 02: 13 August 2017  
 
@@ -195,10 +195,10 @@ It was very interesting to watch the sample coding interview. It came across to 
 ### Day 18: 29 August 2017  
 
 **Today's Progress:**  
-
+Solved two more basic algorithm problems on freeCodeCamp.
 
 **Thoughts:**  
-
+I am starting to feel more comfortable attacking the problems and starting to think through them piece by piece from many angles.
 
 **Link to work:** 
 
