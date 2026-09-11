@@ -226,3 +226,35 @@ When re-measuring, exclude `Style.bar.*` (they are Style tokens, not members)
 and *include* `root.bar.*` forms — missing the latter is what hid
 `showTooltip` the first time.
 
+## The CLI rung is mostly reuse
+
+The scope ladder assumed a set of `omarchy-phone-*` equivalents for brightness,
+audio, power profile and cellular. Most of that turned out to be unnecessary:
+
+- **Brightness already works.** `omarchy-brightness-display` counts `DSI-` among
+  its internal panels (`monitor_is_internal()` matches `^(eDP|LVDS|DSI)-`) and
+  drives `brightnessctl` against whatever `omarchy-hw-display` reports. That
+  helper picks the first entry in `/sys/class/backlight` and only then refines
+  through an x86-flavoured candidate list (gmux, amdgpu, intel, acpi), so a
+  phone panel lands on the fallback and works. `OMARCHY_BACKLIGHT_PATH` is the
+  override if a device ever exposes more than one backlight.
+- **Audio and power profiles** are PipeWire and powerprofilesctl underneath;
+  nothing in them is x86-specific.
+- **Cellular has no ancestor at all.** Nothing in `/usr/share/omarchy` mentions
+  `mmcli` or ModemManager, which makes `bin/omarchy-phone-cellular` the one
+  genuinely new CLI tool the port needs.
+
+Two things learned writing it, neither of which needed a modem:
+
+`mmcli --output-keyvalue` pads its key column with spaces, so matching a key
+with a `$` anchor silently fails — the field still carries trailing whitespace.
+Trim the key before matching. Only `modem.generic.state` and the `/Modem/N`
+path format are actually documented; the full paths for signal quality,
+operator and access technology are not and have moved between releases, so the
+tool matches distinctive key *suffixes* instead of whole keys.
+
+Both were caught by feeding synthetic `mmcli` output to the parser and then by
+putting a stub `mmcli` on PATH — the whole modem path is exercised on a machine
+with no modem, including "searching with signal 0", which must stay 0 rather
+than becoming null.
+

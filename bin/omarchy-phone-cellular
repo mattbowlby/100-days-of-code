@@ -1,0 +1,111 @@
+#!/bin/bash
+
+# omarchy:summary=Report or control the cellular modem.
+# omarchy:args=[--status|--signal|--operator|--state|--enable|--disable]
+# omarchy:examples=omarchy-phone-cellular --status
+
+# Cellular is the one part of the phone CLI with no desktop ancestor: nothing in
+# /usr/share/omarchy touches ModemManager. Brightness, audio and power profiles
+# all generalise from upstream already -- omarchy-brightness-display even counts
+# DSI- among its internal panels -- so this is deliberately the only new tool.
+#
+# Absence is a normal answer here, not an error. No ModemManager, no modem, or a
+# modem that is present but not registered all produce a well-formed status a
+# caller can render, because a bar widget polling this must not have to special
+# case a non-zero exit on every machine that is not a phone.
+
+set -uo pipefail
+
+# `mmcli -L` prints DBus object paths like
+# /org/freedesktop/ModemManager1/Modem/4, where the trailing integer is the
+# index every other mmcli call wants.
+modem_index() {
+  command -v mmcli >/dev/null 2>&1 || return 1
+  mmcli -L 2>/dev/null | grep -oE '/Modem/[0-9]+' | head -n1 | grep -oE '[0-9]+$'
+}
+
+modem_keyvalue() {
+  mmcli -m "$1" --output-keyvalue 2>/dev/null
+}
+
+# Matches on a key SUFFIX rather than the whole key. mmcli pads its key column
+# with spaces, so the key is trimmed before matching -- an unanchored-looking
+# pattern otherwise silently fails against `key$`. modem.generic.state is
+# documented, but the full paths for signal quality, operator and access
+# technology are not, and they have moved between ModemManager releases. The
+# distinctive tail of each key has been stable, so that is what is matched.
+value_for() {
+  awk -v pattern="$2" '
+    {
+      key = $0
+      sub(/:.*$/, "", key)            # key is everything before the first colon
+      gsub(/^[ \t]+|[ \t]+$/, "", key)   # mmcli pads keys, so trim before matching
+      if (key !~ pattern) next
+
+      value = $0
+      sub(/^[^:]*:[ \t]*/, "", value) # keep colons inside the value (dbus paths)
+      gsub(/^[ \t]+|[ \t]+$/, "", value)
+      if (value != "" && value != "--") { print value; exit }
+    }' <<<"$1"
+}
+
+emit_absent() {
+  jq -cn --arg reason "$1" \
+    '{present:false, reason:$reason, state:"", signal:null, operator:"", technology:""}'
+}
+
+status() {
+  command -v mmcli >/dev/null 2>&1 || { emit_absent "no-modemmanager"; return 0; }
+
+  local index
+  index=$(modem_index) || true
+  [[ -n ${index:-} ]] || { emit_absent "no-modem"; return 0; }
+
+  local kv
+  kv=$(modem_keyvalue "$index")
+  [[ -n $kv ]] || { emit_absent "modem-unreadable"; return 0; }
+
+  local state signal operator technology
+  state=$(value_for "$kv" '[.]state$')
+  signal=$(value_for "$kv" 'signal-quality[.]value$')
+  operator=$(value_for "$kv" 'operator-name$')
+  technology=$(value_for "$kv" 'access-technologies[.]value')
+
+  # signal is a percentage; keep it a JSON number so a widget can compare it,
+  # and null rather than 0 when unknown -- 0 is a real reading.
+  jq -cn \
+    --arg state "$state" \
+    --arg operator "$operator" \
+    --arg technology "$technology" \
+    --argjson signal "${signal:-null}" \
+    --argjson index "$index" \
+    '{present:true, index:$index, state:$state, signal:$signal,
+      operator:$operator, technology:$technology}'
+}
+
+field() {
+  status | jq -r --arg key "$1" '.[$key] // ""'
+}
+
+set_enabled() {
+  local index
+  index=$(modem_index) || true
+  [[ -n ${index:-} ]] || {
+    echo "No modem to $1" >&2
+    return 1
+  }
+  mmcli -m "$index" "$2"
+}
+
+case ${1:---status} in
+--status) status ;;
+--signal) field signal ;;
+--operator) field operator ;;
+--state) field state ;;
+--enable) set_enabled enable --enable ;;
+--disable) set_enabled disable --disable ;;
+*)
+  echo "Unknown option for omarchy-phone-cellular: $1" >&2
+  exit 1
+  ;;
+esac

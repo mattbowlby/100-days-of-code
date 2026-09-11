@@ -28,6 +28,7 @@ if codename=$("$OMARCHY_PHONE_PATH/bin/omarchy-phone-device" 2>/dev/null); then
 else
   no "no device profile matches this machine"
   info "expected on a laptop; set an override with:"
+  info "  mkdir -p ${XDG_STATE_HOME:-$HOME/.local/state}/omarchy-phone"
   info "  echo fajita > ${XDG_STATE_HOME:-$HOME/.local/state}/omarchy-phone/device"
 fi
 
