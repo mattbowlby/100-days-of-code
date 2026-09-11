@@ -54,20 +54,41 @@ claim, until it runs on the device.
 5. **Swipe distance of 120 logical px** (a third of the width) is a reasoned
    starting point, not a measured one.
 
-## Open decision — the layout model
+## Settled — the layout model
 
-Unresolved, and it shapes the shell. On a 360px-wide surface, dwindle's split
-gives two 180px columns, which is not a usable phone window. The candidates:
+**One window per workspace**, implemented in `config/hypr/windows.lua` as a
+`window.open` handler that moves a second window on a workspace to an empty one.
 
-- **One window per workspace, dwindle inherited, switch by workspace swipe.**
-  What the current input layer already supports. No window can become
-  unreachable. Closest to Android. Costs: "open a second window" has to mean
-  "open it on the next workspace", which is not dwindle's instinct.
-- **`scrolling` layout at `column_width = 1.0`.** Each window is a full-screen
-  column and the model is exactly a phone's. But column navigation needs a
-  gesture, and per the finding above there is no one-finger gesture API — so a
-  window past the first could be unreachable by touch. Trap unless the shell
-  drives the scroll itself.
+It fell out of the input layer rather than taste. The alternative was a
+`scrolling` layout at `column_width = 1.0`, which is a truer phone model — every
+window a full-screen column — but moving between columns needs a one-finger
+gesture, and per the finding above there is none. A window past the first would
+have been unreachable by touch. Workspaces *are* reachable with one finger via
+`workspace_swipe_touch`, so workspaces are where windows go.
 
-Leaning toward the first, because it cannot strand a window. Settle it before
-building the app grid, which assumes one or the other.
+Consequences to hold onto while building the shell: the app switcher is the
+horizontal swipe, the app grid opens apps onto empty workspaces, and "two
+windows side by side" is not a state this port has.
+
+## Also verified
+
+- `workspace = "empty"` resolves in the Lua dispatcher — `hl.dsp.focus({
+  workspace = "empty" })` moved 2 → 3 on this machine. Same workspace-argument
+  parser `hl.dsp.window.move` uses.
+- `hl.dsp.window.move` takes **no window argument**. Its accepted arguments are
+  `direction, x+y(+relative), workspace, into_group, out_of_group`, so it acts on
+  whatever holds focus. Any handler that moves a window must first confirm the
+  window it means is the focused one.
+- Windows expose `address, class, initial_class, title, workspace, floating,
+  fullscreen, pid, monitor, mapped` — and no geometry. Workspaces expose
+  `id, name, windows` (a live count), `monitor, last_window, has_fullscreen`.
+- `hl.on` validates event names and its error lists all 31 of them. The useful
+  ones here: `window.open`, `window.open_early`, `window.close`, `window.active`,
+  `workspace.active`, `monitor.layout_changed`, `input.keyboard.key` — that last
+  one is how a compositor-side long-press could be done if logind's turns out
+  not to be enough.
+- `hyprctl dispatch` compiles its arguments as Lua now, so the old
+  `hyprctl dispatch workspace empty` form is a syntax error. Use `hyprctl eval`.
+- Handlers registered through `hyprctl eval` do **not** persist, so event
+  payloads cannot be observed off-device this way. This is why
+  `config/hypr/windows.lua` guards its payload instead of trusting it.
