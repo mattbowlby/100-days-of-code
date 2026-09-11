@@ -92,3 +92,55 @@ windows side by side" is not a state this port has.
 - Handlers registered through `hyprctl eval` do **not** persist, so event
   payloads cannot be observed off-device this way. This is why
   `config/hypr/windows.lua` guards its payload instead of trusting it.
+
+## Settled — the shell is plugins, not a fork
+
+The phone shell is **a set of Omarchy shell plugins**, installed into
+`~/.config/omarchy/plugins/`. It is not a second Quickshell config.
+
+Why, concretely. Quickshell registers the launched config root as the QML module
+`qs`, so every `import qs.Commons` / `import qs.Ui` resolves against *that* root.
+A separate phone shell at its own path would therefore get no `Commons` and no
+`Ui` — the whole component kit and every theme token would have to be forked or
+symlinked. Meanwhile upstream's `shell.qml` is a 1031-line plugin host that
+already does config loading, plugin discovery and bar selection, and its
+`services/PluginRegistry.qml` scans `~/.config/omarchy/plugins` alongside the
+bundled ones. `shell.qml` picks the active bar by id from shell config and loads
+it through `entryPointUrl(manifest, "bar")`.
+
+So the bar is a designed replacement point, and a plugin's QML imports
+`qs.Commons` and `qs.Ui` normally — upstream's own `plugins/lock/LockView.qml`
+does exactly that. The port gets the host, the kit and the theming for free, and
+"extend upstream, don't fork it" stops being an aspiration.
+
+Manifest contract (`schemaVersion: 1`): `id`, `name`, `version`, `author`,
+`description`, `kinds[]`, `entryPoints{kind: relative path}`, plus optional
+`keepLoaded` and `barWidget.defaultSection`. Entry points must be relative and
+inside the plugin directory — PluginRegistry rejects the manifest otherwise.
+The kinds in use upstream: `bar`, `bar-widget`, `service`, `overlay`, `panel`,
+`menu`.
+
+Planned plugins, in build order: `omarchy.phone.bar` (kind `bar`), then the app
+grid and on-screen keyboard as `overlay`s built out from `Ui/KeyboardPanel.qml`,
+then a phone `lock`.
+
+## Verifying QML
+
+`qmllint` **is** installed — `/usr/lib/qt6/bin/qmllint`, from `qt6-declarative`,
+just not on `PATH`. `bin/omarchy-phone-lint-qml` wraps it with the two things
+needed to make it useful:
+
+- a temp directory holding a single `qs` symlink to `$OMARCHY_PATH/shell`, since
+  QML resolves module `qs.Commons` as `<import path>/qs/Commons/` and only
+  Quickshell knows to register the config root as `qs` at runtime;
+- `--missing-property` and `--uncreatable-type` disabled, because `Style`'s
+  nested tokens are runtime-built QtObjects and Quickshell's `PanelWindow` is
+  engine-instantiated. Both are wrong here, not merely noisy.
+
+Under exactly those settings upstream's `Ui/Button.qml`, `Ui/Panel.qml` and
+`Commons/Style.qml` report **zero** warnings, and a genuine typo is still caught
+as unqualified access. So a warning on phone QML means something.
+
+Note: **`qs` has no `--check` subcommand.** Its subcommands are `log`, `list`,
+`kill`, `ipc`, `msg`. Parsing QML by running the shell is not a lint; use the
+script above.
