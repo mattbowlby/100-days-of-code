@@ -42,10 +42,15 @@ bin/omarchy-phone-install --apply   # actually install (refuses off-device)
 To try the shell plugins without installing the session:
 
 ```bash
-bin/omarchy-phone-plugins-link                   # link into ~/.config/omarchy/plugins
-jq '.bar.id = "dev.omarchyphone.bar"' ~/.config/omarchy/shell.json | sponge ...
+cfg=~/.config/omarchy/shell.json
+cp "$cfg" "$cfg.bak"                              # keep a way back
+bin/omarchy-phone-plugins-link                    # link into ~/.config/omarchy/plugins
+jq '.bar.id = "dev.omarchyphone.bar"' "$cfg.bak" > "$cfg"
 omarchy-restart-shell
-bin/omarchy-phone-plugins-link --unlink          # and back out
+
+cp "$cfg.bak" "$cfg"                              # and back out
+bin/omarchy-phone-plugins-link --unlink
+omarchy-restart-shell
 ```
 
 `--unlink` only removes symlinks that resolve into this checkout, so a real
