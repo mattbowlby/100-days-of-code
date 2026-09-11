@@ -8,7 +8,6 @@ pragma ComponentBehavior: Bound
 
 import QtQuick
 import Quickshell
-import Quickshell.Services.UPower
 import Quickshell.Wayland
 import qs.Commons
 
@@ -40,6 +39,89 @@ Item {
   // which is the gesture a thumb makes anyway.
   readonly property int barSize: Style.bar.sizeHorizontal
 
+  // Right-hand status widgets, in order. Kept short on purpose: 360 logical px
+  // is the whole width, and the clock owns the left.
+  readonly property var statusWidgetIds: ["omarchy.network", "omarchy.power"]
+
+  // ------------------------------------------------------------ bar protocol
+  //
+  // The surface hosted widgets read off their injected `bar`. Measured rather
+  // than guessed: 15 members across plugins/panels/*/Panel.qml and Ui/*.qml.
+  // Ui/BarWidget.qml and Ui/WidgetButton.qml guard every one of theirs, but
+  // plugin widgets do not -- network/Panel.qml dereferences bar.foreground and
+  // bar.fontFamily straight, and with a null bar that is a TypeError per
+  // binding on every shell start. (Careful with `Style.bar.iconSlot` and
+  // friends when re-measuring: those are Style tokens, not members of this.)
+  readonly property color foreground: Color.bar.text
+  readonly property color barForeground: Color.bar.text
+  readonly property color background: Color.bar.background
+  readonly property color urgent: Color.bar.active
+  readonly property string fontFamily: Style.font.family
+
+  // A portrait phone bar is always horizontal, whichever edge it sits on.
+  readonly property bool vertical: false
+  readonly property bool foregroundAnimationEnabled: false
+
+  // bar.x is read for popup positioning and is deliberately NOT declared here:
+  // this root is an Item, so it already has x, and QQuickItem.x is final --
+  // shadowing it is a runtime error, not a style question.
+
+  // One popout at a time, the same discipline upstream keeps: opening a second
+  // closes the first. Worth implementing rather than stubbing -- without it two
+  // panels can sit open at once, and on 360px there is not room for one.
+  property var activePopout: null
+
+  function requestPopout(owner) {
+    if (activePopout === owner) return
+    if (activePopout) {
+      if ("closeForPopoutSwitch" in activePopout) activePopout.closeForPopoutSwitch()
+      else if ("close" in activePopout) activePopout.close()
+    }
+    activePopout = owner
+  }
+
+  function releasePopout(owner) {
+    if (activePopout === owner) activePopout = null
+  }
+
+  // Cycling left/right through neighbouring panels is a pointer affordance with
+  // no phone equivalent, so it is deliberately inert rather than unimplemented.
+  function switchPanelFrom(owner, direction) {}
+
+  // Hover has no phone equivalent either -- but these must EXIST, not merely be
+  // guarded against. Ui/WidgetButton.qml tests `if (root.bar)` and then calls
+  // bar.showTooltip(...), so the guard asks whether a bar is set, not whether
+  // it can do this. Injecting a bar without them is what turned a null-bar
+  // TypeError into a not-a-function TypeError.
+  function showTooltip(target, text) {}
+  function hideTooltip(target) {}
+
+  // Written by clock/Panel.qml and weather/Panel.qml, so it has to be settable.
+  property bool centerHoverRevealSuppressed: false
+
+  // Read by Ui/KeyboardPanel.qml to find what a tap should dismiss.
+  property var clickTargets: []
+
+  function targetWindow(target) {
+    return target && target.QsWindow ? target.QsWindow.window : null
+  }
+
+  function targetBelongsToWindow(target, window) {
+    return !!target && !!window && targetWindow(target) === window
+  }
+
+  // Widgets launch commands through the bar rather than owning a Process each.
+  function run(command) {
+    if (!command) return
+    Util.execDetached(command)
+  }
+
+  // The phone bar shows at most one instance of any widget id, and nothing here
+  // needs to address its siblings.
+  function moduleWidgets(pluginId) {
+    return []
+  }
+
   SystemClock {
     id: clock
 
@@ -49,10 +131,6 @@ Item {
     precision: SystemClock.Minutes
   }
 
-  readonly property var batteryDevice: UPower.displayDevice
-  readonly property bool batteryPresent: !!(batteryDevice && batteryDevice.isPresent)
-  readonly property int batteryPercent: batteryPresent ? Math.round(batteryDevice.percentage * 100) : 0
-  readonly property bool charging: batteryPresent && batteryDevice.state === UPowerDeviceState.Charging
 
   Variants {
     model: Quickshell.screens
@@ -85,6 +163,10 @@ Item {
     WlrLayershell.namespace: "omarchy-phone-bar"
     WlrLayershell.layer: WlrLayer.Top
 
+    // Hand-rolled rather than hosting omarchy.clock, and that is a
+    // requirement difference rather than duplicated work: the clock widget
+    // carries a calendar popout and its stock format is "dddd HH:mm", where a
+    // phone status bar wants bare HH:mm and no popout.
     Text {
       id: clockLabel
 
@@ -98,21 +180,45 @@ Item {
       font.pixelSize: Style.font.body
     }
 
-    Text {
-      id: batteryLabel
+    // First-party bar widgets, hosted rather than reimplemented. shell.qml
+    // registers these from plugins/panels/* regardless of which bar is active
+    // (omarchy.power, omarchy.network, omarchy.bluetooth, omarchy.audio, ...),
+    // so the phone gets their live data, icons and theming for nothing.
+    Row {
+      id: statusRow
 
       anchors.right: parent.right
       anchors.rightMargin: Style.spacing.lg
       anchors.verticalCenter: parent.verticalCenter
+      spacing: Style.spacing.md
 
-      visible: root.batteryPresent
-      text: (root.charging ? "+" : "") + root.batteryPercent + "%"
+      Repeater {
+        model: root.statusWidgetIds
 
-      // Low and not charging is the one state the bar should raise its voice
-      // for; Color.bar.active is the theme's own attention colour.
-      color: !root.charging && root.batteryPercent <= 15 ? Color.bar.active : Color.bar.text
-      font.family: Style.font.family
-      font.pixelSize: Style.font.body
+        delegate: Loader {
+          id: widgetLoader
+
+          required property string modelData
+
+          readonly property var entry: root.barWidgetRegistry
+            ? root.barWidgetRegistry.widgets[modelData]
+            : null
+
+          active: entry !== null && entry !== undefined
+          sourceComponent: entry ? entry.component : null
+          anchors.verticalCenter: parent.verticalCenter
+
+          onLoaded: {
+            // `bar` is this root, which implements the 15-member protocol
+            // above. Leaving it null was tried first and is wrong: the guards
+            // in Ui/BarWidget.qml do not extend to plugin widgets, which
+            // dereference bar.foreground directly.
+            if ("bar" in item) item.bar = root
+            if ("moduleName" in item) item.moduleName = modelData
+            if ("settings" in item) item.settings = ({})
+          }
+        }
+      }
     }
   }
 }
