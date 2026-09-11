@@ -258,3 +258,28 @@ putting a stub `mmcli` on PATH — the whole modem path is exercised on a machin
 with no modem, including "searching with signal 0", which must stay 0 rather
 than becoming null.
 
+## Theming is nearly free, with one open question
+
+Colour works unchanged. All 22 themes under `/usr/share/omarchy/themes/` supply
+their palette the ordinary way, `Color` resolves it, and the phone bar and app
+grid read `Color.bar.*` / `Color.menu.*` / `Color.background` like any other
+consumer. Nothing in the port needs a theme of its own.
+
+The open question is sizing. `Style` takes typography, spacing and bar
+dimensions from `shell.toml` in the active theme — `[font] base-size` as the rem
+root, `[spacing] scale`, `[bar] size-horizontal` — and **not one of the 22 themes
+ships a `shell.toml`**. Every theme therefore runs on `Style`'s built-in
+defaults: base-size 12, bar 26.
+
+Whether those are right for a phone cannot be answered here. At scale 3 on a
+360px logical width, 12px text occupies about 3.3% of the width against 0.8% on
+this laptop, so it is *relatively* four times larger already, which is roughly
+what a phone wants. That is an argument for leaving it alone until it can be
+looked at on the device, not a measurement.
+
+If it does need tuning, the lever is a `shell.toml` in the active theme
+(`~/.local/state/omarchy/current/theme/shell.toml`, which `Color.loadShell`
+parses and hands to `Style`). Per-theme is an awkward place for a device-wide
+setting, so that is a design problem to solve when there is evidence it needs
+solving — forking 22 themes to change one number would be the wrong answer.
+
