@@ -181,3 +181,48 @@ clean of QML errors.
 symlinks that resolve back into this checkout, so a real plugin directory of the
 same name is never destroyed.
 
+## The `bar` protocol
+
+A hosted bar widget is handed a `bar` object and reads members off it. Upstream
+never writes this contract down — it is whatever `plugins/bar/Bar.qml` happens
+to expose — so here it is, measured across `plugins/panels/*/Panel.qml`,
+`plugins/*/BarWidget.qml` and `Ui/*.qml`:
+
+| Member | Kind | Phone bar's answer |
+|---|---|---|
+| `foreground`, `barForeground` | color | `Color.bar.text` |
+| `background` | color | `Color.bar.background` |
+| `urgent` | color | `Color.bar.active` |
+| `fontFamily` | string | `Style.font.family` |
+| `vertical` | bool | `false` — a portrait bar is horizontal |
+| `barSize`, `position` | int/string | the bar's own |
+| `x` | real | **not declared** — the root is an `Item`, and `QQuickItem.x` is final |
+| `foregroundAnimationEnabled` | bool | `false` |
+| `activePopout` | var | real, with `requestPopout`/`releasePopout` |
+| `centerHoverRevealSuppressed` | bool | writable — clock and weather *set* it |
+| `clickTargets` | var | `[]` |
+| `shell` | var | injected by the host |
+| `showTooltip`, `hideTooltip` | func | no-ops |
+| `switchPanelFrom` | func | no-op — pointer affordance, no phone equivalent |
+| `moduleWidgets` | func | `[]` |
+| `targetWindow`, `targetBelongsToWindow` | func | via the `QsWindow` attached property |
+| `run` | func | `Util.execDetached` |
+
+Three things this cost, each found only by running it:
+
+1. **A null `bar` is not safe.** `Ui/BarWidget.qml` and `Ui/WidgetButton.qml`
+   guard every read (`bar ? bar.x : fallback`), but plugin widgets do not —
+   `network/Panel.qml` dereferences `bar.foreground` straight.
+2. **The guards ask whether a bar is set, not what it can do.**
+   `WidgetButton` tests `if (root.bar)` and then calls `bar.showTooltip(...)`,
+   so injecting a partial bar converts a null-bar TypeError into a
+   not-a-function TypeError. Every function above must exist even when inert.
+3. **Inject twice.** Widget bindings evaluate before `onLoaded`, so a live
+   plugin reload can show them a null bar for a frame — 228 TypeErrors in one
+   observed reload. Upstream's `ModuleSlot.injectProps` is called immediately
+   and again under `Qt.callLater`; do the same.
+
+When re-measuring, exclude `Style.bar.*` (they are Style tokens, not members)
+and *include* `root.bar.*` forms — missing the latter is what hid
+`showTooltip` the first time.
+
