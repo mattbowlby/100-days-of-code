@@ -1,0 +1,112 @@
+#!/bin/bash
+
+# omarchy:summary=Report the state of the Omarchy Phone port on this machine.
+# omarchy:args=[--quiet]
+# omarchy:examples=omarchy-phone-diagnose
+
+# Read-only by design: it inspects, it never links, enables, or restarts
+# anything. Safe to run on the machine someone is using.
+
+set -uo pipefail
+
+OMARCHY_PATH="${OMARCHY_PATH:-/usr/share/omarchy}"
+OMARCHY_PHONE_PATH="${OMARCHY_PHONE_PATH:-$(dirname "$(dirname "$(readlink -f "$0")")")}"
+SHELL_CONFIG="${XDG_CONFIG_HOME:-$HOME/.config}/omarchy/shell.json"
+PLUGINS_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/omarchy/plugins"
+
+ok() { printf '  \033[32m*\033[0m %s\n' "$1"; }
+no() { printf '  \033[31mx\033[0m %s\n' "$1"; }
+info() { printf '    %s\n' "$1"; }
+head_() { printf '\n\033[1m%s\033[0m\n' "$1"; }
+
+head_ "Device"
+if codename=$("$OMARCHY_PHONE_PATH/bin/omarchy-phone-device" 2>/dev/null); then
+  ok "profile resolves: $codename"
+  for key in DEVICE_NAME DEVICE_SOC DEVICE_BASE DEVICE_MODE DEVICE_SCALE; do
+    info "$key = $("$OMARCHY_PHONE_PATH/bin/omarchy-phone-device" --field "$key" 2>/dev/null)"
+  done
+else
+  no "no device profile matches this machine"
+  info "expected on a laptop; set an override with:"
+  info "  echo fajita > ${XDG_STATE_HOME:-$HOME/.local/state}/omarchy-phone/device"
+fi
+
+head_ "Session modules (config/hypr)"
+# Upstream's hyprland.lua requires exactly these; a missing one is not a
+# degraded session, it is a config that will not load at all.
+for module in device monitors input bindings looknfeel autostart windows hyprland; do
+  file="$OMARCHY_PHONE_PATH/config/hypr/$module.lua"
+  if [[ ! -f $file ]]; then
+    no "$module.lua missing"
+  elif luac -p "$file" 2>/dev/null; then
+    ok "$module.lua parses"
+  else
+    no "$module.lua FAILS to parse"
+  fi
+done
+
+head_ "Shell plugins"
+shopt -s nullglob
+for dir in "$OMARCHY_PHONE_PATH"/plugins/*/; do
+  name=$(basename "$dir")
+  manifest="$dir/manifest.json"
+  [[ -f $manifest ]] || { no "$name has no manifest.json"; continue; }
+
+  id=$(jq -r '.id // ""' "$manifest" 2>/dev/null)
+  kinds=$(jq -r '(.kinds // []) | join(",")' "$manifest" 2>/dev/null)
+  [[ -n $id ]] || { no "$name has no id"; continue; }
+
+  # The whole omarchy.* namespace belongs to first-party plugins; PluginRegistry
+  # rejects a third-party manifest that claims it, and the failure is only
+  # visible in the shell log.
+  case $id in
+  omarchy.*) no "$name: id '$id' is in the reserved omarchy.* namespace" ;;
+  *) ok "$name: $id [$kinds]" ;;
+  esac
+
+  if [[ -L "$PLUGINS_DIR/$name" ]]; then
+    info "linked into $PLUGINS_DIR"
+  else
+    info "not linked (omarchy-phone-plugins-link)"
+  fi
+
+  if [[ -r $SHELL_CONFIG ]]; then
+    if [[ $kinds == *bar* ]]; then
+      selected=$(jq -r '.bar.id // ""' "$SHELL_CONFIG" 2>/dev/null)
+      [[ $selected == "$id" ]] && info "active: selected as bar.id" \
+        || info "inactive: bar.id is '${selected:-unset}'"
+    else
+      # A third-party non-bar plugin is enabled only by appearing in plugins[].
+      if jq -e --arg id "$id" '(.plugins // []) | any(.id == $id)' "$SHELL_CONFIG" >/dev/null 2>&1; then
+        info "enabled in shell.json plugins[]"
+      else
+        info "not enabled: absent from shell.json plugins[]"
+      fi
+    fi
+  fi
+done
+shopt -u nullglob
+
+head_ "Tooling"
+if [[ -x ${QMLLINT:-/usr/lib/qt6/bin/qmllint} ]]; then
+  if out=$("$OMARCHY_PHONE_PATH/bin/omarchy-phone-lint-qml" 2>&1); then
+    ok "QML lints clean -- ${out##*$'\n'}"
+  else
+    no "QML lint reports findings"
+    printf '%s\n' "$out" | sed 's/^/    /' | head -12
+  fi
+else
+  no "qmllint not found (pacman -S qt6-declarative)"
+fi
+command -v shellcheck >/dev/null && ok "shellcheck present" || info "shellcheck absent; bash is -n only"
+
+head_ "Running shell"
+if pgrep -f "quickshell.*omarchy" >/dev/null 2>&1; then
+  ok "omarchy-shell is running"
+  if command -v hyprctl >/dev/null; then
+    layers=$(hyprctl layers 2>/dev/null | grep -oE 'namespace: [^,]+' | sed 's/namespace: //' | sort -u | tr '\n' ' ')
+    info "layer surfaces: ${layers:-none}"
+  fi
+else
+  info "omarchy-shell is not running"
+fi
