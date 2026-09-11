@@ -39,9 +39,34 @@ Item {
   // which is the gesture a thumb makes anyway.
   readonly property int barSize: Style.bar.sizeHorizontal
 
-  // Right-hand status widgets, in order. Kept short on purpose: 360 logical px
-  // is the whole width, and the clock owns the left.
-  readonly property var statusWidgetIds: ["omarchy.network", "omarchy.power"]
+  // Status widgets come from shell.json's bar.layout.right -- the same key the
+  // desktop bar reads -- so a phone bar is configured the ordinary way and
+  // Util.normalizeLayoutSection handles both "id" strings and {id, ...settings}
+  // objects. The fallback is a phone default rather than upstream's, whose
+  // right section carries seven widgets: more than 360 logical px has room for.
+  readonly property var defaultStatusEntries: [
+    { id: "omarchy.bluetooth" },
+    { id: "omarchy.network" },
+    { id: "omarchy.power" }
+  ]
+
+  readonly property var statusEntries: {
+    var section = barConfig && barConfig.layout ? barConfig.layout.right : null
+    var configured = Util.normalizeLayoutSection(section)
+    return configured.length > 0 ? configured : defaultStatusEntries
+  }
+
+  // Everything on an entry except its id is that widget's settings, matching
+  // BarModel.entrySettings.
+  function entrySettings(entry) {
+    if (!entry) return ({})
+    var copy = ({})
+    for (var key in entry) {
+      if (key === "id") continue
+      copy[key] = entry[key]
+    }
+    return copy
+  }
 
   // ------------------------------------------------------------ bar protocol
   //
@@ -193,29 +218,42 @@ Item {
       spacing: Style.spacing.md
 
       Repeater {
-        model: root.statusWidgetIds
+        model: root.statusEntries
 
         delegate: Loader {
           id: widgetLoader
 
-          required property string modelData
+          required property var modelData
 
-          readonly property var entry: root.barWidgetRegistry
-            ? root.barWidgetRegistry.widgets[modelData]
+          readonly property string widgetId: modelData && modelData.id ? String(modelData.id) : ""
+          readonly property var registryEntry: widgetId && root.barWidgetRegistry
+            ? root.barWidgetRegistry.widgets[widgetId]
             : null
 
-          active: entry !== null && entry !== undefined
-          sourceComponent: entry ? entry.component : null
+          // A configured id with no registered widget renders nothing rather
+          // than breaking the row -- a plugin can be uninstalled while its id
+          // is still listed in shell.json.
+          active: registryEntry !== null && registryEntry !== undefined
+          sourceComponent: registryEntry ? registryEntry.component : null
           anchors.verticalCenter: parent.verticalCenter
 
-          onLoaded: {
-            // `bar` is this root, which implements the 15-member protocol
-            // above. Leaving it null was tried first and is wrong: the guards
-            // in Ui/BarWidget.qml do not extend to plugin widgets, which
-            // dereference bar.foreground directly.
+          function injectProps() {
+            var item = widgetLoader.item
+            if (!item) return
             if ("bar" in item) item.bar = root
-            if ("moduleName" in item) item.moduleName = modelData
-            if ("settings" in item) item.settings = ({})
+            if ("moduleName" in item) item.moduleName = widgetId
+            if ("settings" in item) item.settings = root.entrySettings(modelData)
+          }
+
+          onLoaded: {
+            // Injected twice, the second deferred, exactly as upstream's
+            // ModuleSlot.injectProps does. A widget's bindings evaluate before
+            // onLoaded runs, so during a live plugin reload they can see a null
+            // bar for a frame and log a TypeError per binding -- 228 of them in
+            // one observed reload. A clean start does not hit it; the deferred
+            // pass is what covers the reload path.
+            injectProps()
+            Qt.callLater(injectProps)
           }
         }
       }
