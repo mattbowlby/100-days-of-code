@@ -29,9 +29,14 @@ hl.config({
   },
 
   misc = {
-    -- The desktop wakes the display on any keypress. Here the only key is
-    -- power, which belongs to the lock/DPMS path rather than to input.
-    key_press_enables_dpms = device.has_keyboard,
+    -- The power button is a key (Omarchy sets HandlePowerKey=ignore in logind,
+    -- so the compositor sees KEY_POWER), and on a phone it is the only way to
+    -- wake a blanked panel. This has to stay true: with it false and no pointer
+    -- to move either, nothing on the device can turn the display back on.
+    key_press_enables_dpms = true,
+
+    -- There is no pointer. Touch-emulated motion must not count as a wake, or
+    -- a phone in a pocket wakes on every jostle.
     mouse_move_enables_dpms = false,
   },
 
