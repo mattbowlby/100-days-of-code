@@ -68,8 +68,24 @@ done
   exit 0
 }
 
-"$QMLLINT" \
+# qmllint exits 0 even when it warns. The baseline under these settings is
+# provably zero warnings on upstream's own Ui/Button.qml, Ui/Panel.qml and
+# Commons/Style.qml, so any warning here is a finding and should fail -- a check
+# that cannot fail is not a check.
+output=$("$QMLLINT" \
   -I "$farm" \
   --missing-property disable \
   --uncreatable-type disable \
-  "${files[@]}"
+  "${files[@]}" 2>&1) || true
+
+if [[ -n $output ]]; then
+  printf '%s\n' "$output"
+  warnings=$(grep -c '^Warning:' <<<"$output" || true)
+  if [[ ${warnings:-0} -gt 0 ]]; then
+    echo
+    echo "$warnings warning(s) in ${#files[@]} file(s)" >&2
+    exit 1
+  fi
+fi
+
+echo "clean: ${#files[@]} file(s)"
