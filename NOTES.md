@@ -144,3 +144,40 @@ as unqualified access. So a warning on phone QML means something.
 Note: **`qs` has no `--check` subcommand.** Its subcommands are `log`, `list`,
 `kill`, `ipc`, `msg`. Parsing QML by running the shell is not a lint; use the
 script above.
+
+## Plugin ids: the `omarchy.` namespace is reserved
+
+`omarchy.phone.bar` was **rejected at runtime**, and nothing static would have
+caught it:
+
+```
+PluginRegistry: plugin omarchy.phone.bar rejected:
+  id is reserved for first-party Omarchy plugins
+```
+
+PluginRegistry drops any third-party manifest whose id starts with the literal
+`omarchy.` — the whole namespace belongs to built-ins, including bar widgets
+registered outside the manifest system. The port uses **`dev.omarchyphone.*`**.
+
+The rest of the id rule: non-empty, no `/`, no `..`, not starting with `/`.
+`Util.canonicalWidgetId` is the identity function, so an id is compared exactly
+as written. Third-party plugins on this machine use reverse-DNS
+(`io.github.<user>.<name>`), which is the convention to follow.
+
+The fallback worked as designed: with the bar rejected, `activeBarId` reverted to
+`omarchy.bar` and the desktop bar rendered. A broken phone bar cannot leave a
+session without one.
+
+## The bar has actually run
+
+Not just linted. Linked into `~/.config/omarchy/plugins`, selected with
+`bar.id`, and restarted: the layer surface mapped as `omarchy-phone-bar` at
+`0 0 1536x26` (its height is `Style.bar.sizeHorizontal`, default 26), and a
+`grim` capture showed `18:58` on the left and `+45%` on the right in theme
+colours — clock, battery percentage and charging prefix all live. Shell log was
+clean of QML errors.
+
+`bin/omarchy-phone-plugins-link` does the linking, and `--unlink` only removes
+symlinks that resolve back into this checkout, so a real plugin directory of the
+same name is never destroyed.
+
