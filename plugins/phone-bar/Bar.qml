@@ -57,6 +57,65 @@ Item {
     return configured.length > 0 ? configured : defaultStatusEntries
   }
 
+  // ------------------------------------------------- bar-widget panel protocol
+  //
+  // Upstream's panels -- audio, network, bluetooth, power, monitor -- are not
+  // summoned through the panel loader. shell.summon() sees a plugin whose kinds
+  // are bar-widget with no loader kind and routes it to shell.bar instead, so
+  // without these four functions `omarchy-shell shell toggle omarchy.audio`
+  // answers "no live bar widget for" and every one of those panels is
+  // unreachable from a phone bar. Implementing them is what makes the whole
+  // upstream panel set work here.
+  property var widgetItems: ({})
+
+  function registerWidgetItem(widgetId, item) {
+    var id = String(widgetId || "")
+    if (!id) return
+    var next = ({})
+    for (var key in widgetItems) next[key] = widgetItems[key]
+    next[id] = item
+    widgetItems = next
+  }
+
+  function unregisterWidgetItem(widgetId) {
+    var id = String(widgetId || "")
+    if (!widgetItems[id]) return
+    var next = ({})
+    for (var key in widgetItems) if (key !== id) next[key] = widgetItems[key]
+    widgetItems = next
+  }
+
+  function findPanelWidget(pluginId) {
+    return widgetItems[String(pluginId || "")] || null
+  }
+
+  function summonBarWidget(pluginId) {
+    var item = findPanelWidget(pluginId)
+    if (!item || typeof item.open !== "function") return false
+    item.open()
+    return true
+  }
+
+  function hideBarWidget(pluginId) {
+    var item = findPanelWidget(pluginId)
+    if (!item || typeof item.close !== "function") return false
+    item.close()
+    return true
+  }
+
+  function isBarWidgetOpen(pluginId) {
+    var item = findPanelWidget(pluginId)
+    return !!item && item.opened === true
+  }
+
+  // The phone bar has one run of widgets, so the section name is accepted and
+  // ignored rather than pretended into left/center/right.
+  function panelWidgetIdAt(section, index) {
+    var position = Math.round(Number(index)) - 1
+    var entry = statusEntries[position]
+    return entry && entry.id ? String(entry.id) : ""
+  }
+
   // Everything on an entry except its id is that widget's settings, matching
   // BarModel.entrySettings.
   function entrySettings(entry) {
@@ -255,7 +314,10 @@ Item {
             // pass is what covers the reload path.
             injectProps()
             Qt.callLater(injectProps)
+            root.registerWidgetItem(widgetId, item)
           }
+
+          Component.onDestruction: root.unregisterWidgetItem(widgetId)
         }
       }
     }

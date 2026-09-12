@@ -342,3 +342,37 @@ Which font matters. Two are in play and they are not interchangeable:
 
 Verified this way: `f11c` is a keyboard, `f023` a lock, `f0e4` a gauge.
 
+## Bar widgets whose panels are summoned through the bar
+
+A second, separate protocol from the `bar` one above, and missing it makes a
+whole category of upstream feature silently unreachable.
+
+`shell.summon()` checks `isBarWidgetPanelPlugin(id)`: a plugin whose kinds
+include `bar-widget` and **no** loader kind (panel/overlay/menu) is not routed to
+the panel loader at all. It is handed to `shell.bar` instead. That covers
+`omarchy.audio`, `omarchy.network`, `omarchy.bluetooth`, `omarchy.power`,
+`omarchy.monitor`, `omarchy.weather` and the rest of `plugins/panels/*`.
+
+So a replacement bar must implement four functions or every one of those panels
+answers "no live bar widget for" and cannot be opened:
+
+| Function | Contract |
+|---|---|
+| `summonBarWidget(id)` | find the loaded widget item, call `item.open()`, return whether it worked |
+| `hideBarWidget(id)` | same, `item.close()` |
+| `isBarWidgetOpen(id)` | `item.opened === true` |
+| `panelWidgetIdAt(section, index)` | id of the *index*-th widget in a section, 1-based |
+
+Which means the bar has to keep an id → loaded-item map. The phone bar registers
+in the widget Loader's `onLoaded` and drops the entry in
+`Component.onDestruction`.
+
+Verified by summoning `omarchy.network` and `omarchy.power` through the phone
+bar: each opened a panel surface (namespace `omarchy-keyboard-panel`, since
+`Ui/KeyboardPanel.qml` is what those popups are built on) and closed again on a
+second toggle, with no warnings.
+
+A plugin that declares a loader kind *as well as* `bar-widget` is exempt and
+stays with the panel loader — which is why `phone-keyboard` can be both an
+overlay and a bar widget without its toggle being rerouted.
+
