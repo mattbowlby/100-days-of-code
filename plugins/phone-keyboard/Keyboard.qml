@@ -26,14 +26,31 @@ Item {
   readonly property int keyHeight: Style.space(44)
   readonly property int keyGap: Style.spacing.xs
 
+  // "letters" or "symbols". Named keyLayer, not layer: QQuickItem.layer is
+  // final (the layer-effects property) and shadowing it is a runtime error.
+  // Shift applies only to letters -- symbol keys have no
+  // case, so it is left inert there rather than given a second meaning.
+  property string keyLayer: "letters"
+
   readonly property var letterRows: [
     "qwertyuiop",
     "asdfghjkl",
     "zxcvbnm"
   ]
 
+  // Ten per row, matching the letter grid, so the key width is the same in both
+  // layers and nothing shifts under the thumb when the layer changes.
+  readonly property var symbolRows: [
+    "1234567890",
+    "-/:;()$&@\"",
+    ".,?!'+=#%*"
+  ]
+
+  readonly property var currentRows: layer === "symbols" ? symbolRows : letterRows
+
   function open(payloadJson) {
     shifted = false
+    keyLayer = "letters"
     opened = true
   }
 
@@ -89,7 +106,7 @@ Item {
       spacing: root.keyGap
 
       Repeater {
-        model: root.letterRows
+        model: root.currentRows
 
         delegate: Row {
           id: letterRow
@@ -115,8 +132,11 @@ Item {
 
               width: letterRow.keyWidth
               height: root.keyHeight
-              label: root.shifted ? modelData.toUpperCase() : modelData
-              onActivated: root.typeText(root.shifted ? modelData.toUpperCase() : modelData)
+              readonly property string character:
+                root.keyLayer === "letters" && root.shifted ? modelData.toUpperCase() : modelData
+
+              label: character
+              onActivated: root.typeText(character)
             }
           }
         }
@@ -127,36 +147,44 @@ Item {
 
         // Width left for keys once the three gaps between four of them are
         // taken, so each key is a fraction of that rather than of the row.
-        readonly property real usable: width - 3 * root.keyGap
+        readonly property real usable: width - 4 * root.keyGap
 
         width: parent.width
         height: root.keyHeight
         spacing: root.keyGap
 
         Key {
-          width: bottomRow.usable * 0.18
+          width: bottomRow.usable * 0.15
           height: root.keyHeight
           label: root.shifted ? "SHIFT" : "shift"
-          active: root.shifted
+          active: root.keyLayer === "letters" && root.shifted
+          enabled: root.keyLayer === "letters"
           onActivated: root.shifted = !root.shifted
         }
 
         Key {
-          width: bottomRow.usable * 0.46
+          width: bottomRow.usable * 0.15
+          height: root.keyHeight
+          label: root.keyLayer === "symbols" ? "abc" : "?123"
+          onActivated: root.keyLayer = root.keyLayer === "symbols" ? "letters" : "symbols"
+        }
+
+        Key {
+          width: bottomRow.usable * 0.36
           height: root.keyHeight
           label: "space"
           onActivated: root.typeText(" ")
         }
 
         Key {
-          width: bottomRow.usable * 0.18
+          width: bottomRow.usable * 0.17
           height: root.keyHeight
           label: "back"
           onActivated: root.typeKey("BackSpace")
         }
 
         Key {
-          width: bottomRow.usable * 0.18
+          width: bottomRow.usable * 0.17
           height: root.keyHeight
           label: "enter"
           onActivated: root.typeKey("Return")
@@ -175,6 +203,10 @@ Item {
 
     radius: Style.cornerRadius
     color: key.active || tap.pressed ? Color.menu.selectedBackground : Color.menu.background
+
+    // Item.enabled cascades and already blocks the tap, but a disabled key that
+    // looks identical to a live one just reads as the phone ignoring you.
+    opacity: enabled ? 1.0 : 0.4
     border.width: Math.max(1, Style.space(1))
     border.color: Color.menu.border
 
