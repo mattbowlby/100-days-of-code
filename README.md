@@ -15,6 +15,11 @@ Omarchy install on an x86 laptop; `NOTES.md` marks what that cannot settle.
 ```
 config/hypr/     the mobile session (Lua, not .conf)
 plugins/         shell plugins, installed to ~/.config/omarchy/plugins
+  phone-bar          status bar; hosts Omarchy's own widgets and panels
+  phone-appgrid      full-screen launcher      (swipe up from the bottom)
+  phone-quicksettings tiles onto Omarchy's panels (swipe down from the top)
+  phone-keyboard     on-screen keyboard        (bar toggle)
+  phone-gestures     owns the screen-edge gesture regions
 bin/             omarchy-phone-* tools
 install/         device bring-up fragments
 ```
@@ -45,13 +50,22 @@ To try the shell plugins without installing the session:
 cfg=~/.config/omarchy/shell.json
 cp "$cfg" "$cfg.bak"                              # keep a way back
 bin/omarchy-phone-plugins-link                    # link into ~/.config/omarchy/plugins
+sleep 10                                          # let the hot-reload settle -- see below
 jq '.bar.id = "dev.omarchyphone.bar"' "$cfg.bak" > "$cfg"
 omarchy-restart-shell
 
 cp "$cfg.bak" "$cfg"                              # and back out
 bin/omarchy-phone-plugins-link --unlink
+sleep 10
 omarchy-restart-shell
 ```
+
+**Do not link and restart in the same breath.** Linking creates several symlinks
+at once, the shell live-reloads a plugin for each, and a restart landing in the
+same second crashes Quickshell — reproducibly, 5 times out of 5 here. It is an
+upstream robustness bug rather than anything in this port, the shell relaunches
+itself afterwards, and a real install never does it (`omarchy-phone-install`
+links and then tells you to restart). `NOTES.md` has the backtrace.
 
 `--unlink` only removes symlinks that resolve into this checkout, so a real
 plugin directory of the same name is never destroyed.
