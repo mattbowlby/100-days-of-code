@@ -72,7 +72,10 @@ for dir in "$OMARCHY_PHONE_PATH"/plugins/*/; do
   fi
 
   if [[ -r $SHELL_CONFIG ]]; then
-    if [[ $kinds == *bar* ]]; then
+    # Exact element, not a substring: `*bar*` also matches "bar-widget", which
+    # is a different thing entirely -- a bar widget is enabled through
+    # plugins[], only a "bar" kind answers to bar.id.
+    if jq -e '(.kinds // []) | index("bar")' "$manifest" >/dev/null 2>&1; then
       selected=$(jq -r '.bar.id // ""' "$SHELL_CONFIG" 2>/dev/null)
       [[ $selected == "$id" ]] && info "active: selected as bar.id" \
         || info "inactive: bar.id is '${selected:-unset}'"
