@@ -45,6 +45,7 @@ Item {
   // objects. The fallback is a phone default rather than upstream's, whose
   // right section carries seven widgets: more than 360 logical px has room for.
   readonly property var defaultStatusEntries: [
+    { id: "dev.omarchyphone.keyboard" },
     { id: "omarchy.bluetooth" },
     { id: "omarchy.network" },
     { id: "omarchy.power" }

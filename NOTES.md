@@ -318,3 +318,27 @@ input-method client. That is a real architectural limit, not a to-do.
 `WlSessionLock` / `WlSessionLockSurface` being present is the good news in the
 same breath: the lock screen rung has a proper API waiting for it.
 
+## Checking an icon glyph without touching the running shell
+
+Bar icons are private-use codepoints, and a wrong one renders as tofu that only
+shows up by looking at it. Swapping someone's bar to find out is rude; render it
+offline instead:
+
+```bash
+python3 -c 'import sys; sys.stdout.write(chr(0xf11c))' > /tmp/g.txt
+pango-view --font="JetBrainsMono Nerd Font 64" --background=white \
+  --foreground=black -q -o /tmp/g.png /tmp/g.txt
+```
+
+Which font matters. Two are in play and they are not interchangeable:
+
+- **`omarchy.ttf`** (`/usr/share/fonts/omarchy/`) covers only **e900-e907**,
+  eight glyphs. `\ue900` is the menu icon. There is no keyboard in it — reaching
+  for `fontFamily: "omarchy"` with an arbitrary codepoint gets tofu.
+- **`monospace`**, which is what the bar actually uses, resolves here to
+  **JetBrainsMono Nerd Font** covering `f000-f385` and `f0001-f1af0`. That is
+  where upstream's `\uf053`, `\uf023` and friends come from, used with no
+  `fontFamily` override at all.
+
+Verified this way: `f11c` is a keyboard, `f023` a lock, `f0e4` a gauge.
+

@@ -6,9 +6,11 @@
   "author": "Omarchy Phone",
   "description": "Thumb-sized on-screen keyboard; types through the Wayland virtual-keyboard protocol.",
   "kinds": [
-    "overlay"
+    "overlay",
+    "bar-widget"
   ],
   "entryPoints": {
-    "overlay": "Keyboard.qml"
+    "overlay": "Keyboard.qml",
+    "barWidget": "BarWidget.qml"
   }
 }
