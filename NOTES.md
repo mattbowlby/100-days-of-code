@@ -283,3 +283,38 @@ parses and hands to `Style`). Per-theme is an awkward place for a device-wide
 setting, so that is a design problem to solve when there is evidence it needs
 solving — forking 22 themes to change one number would be the wrong answer.
 
+## The on-screen keyboard is greenfield, and cannot auto-raise
+
+`Ui/KeyboardPanel.qml` is **not** an on-screen keyboard, despite the name. Its
+own header says it: a layer-shell popup card for panels summoned *by* the
+keyboard (SUPER+CTRL+W and friends), built on PanelWindow with a brief
+`WlrKeyboardFocus.Exclusive` prime. The port's earlier notes and both agent
+files claimed the OSK would extend it. They were wrong, and are fixed.
+
+Quickshell has no virtual-keyboard or input-method type either.
+`Quickshell.Wayland` exposes layer shell, `WlSessionLock` /
+`WlSessionLockSurface`, screencopy, idle notify/inhibit, toplevel management and
+a shortcuts inhibitor — nothing for text input. So `plugins/phone-keyboard`
+injects keys out of process with **`wtype(1)`**, which implements
+`zwp_virtual_keyboard_v1`:
+
+- `wtype -- TEXT` for characters. The `--` is required, not tidiness: `wtype -`
+  means "read from stdin", so typing a bare hyphen would otherwise hang.
+- `wtype -P KEY -p KEY` for named keys (libxkbcommon identifiers — `BackSpace`,
+  `Return`), and `-M`/`-m` for modifiers.
+- Passed as an argv vector, never a command string. `Util` says why in its own
+  comment: a shell would re-tokenize it, and every character on a keyboard is
+  exactly the input that breaks that.
+
+The surface must carry `WlrKeyboardFocus.None`, or the keys wtype injects land
+back in the keyboard instead of the application.
+
+**The consequence worth planning around:** with no input-method protocol, the
+shell cannot know that a text field was focused, so the keyboard cannot raise
+itself. Summoning stays explicit — a gesture or a button — until Quickshell
+grows `text-input-v3`/`input-method-v2`, or the port carries its own small
+input-method client. That is a real architectural limit, not a to-do.
+
+`WlSessionLock` / `WlSessionLockSurface` being present is the good news in the
+same breath: the lock screen rung has a proper API waiting for it.
+
