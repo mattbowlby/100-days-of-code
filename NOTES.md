@@ -376,3 +376,39 @@ A plugin that declares a loader kind *as well as* `bar-widget` is exempt and
 stays with the panel loader — which is why `phone-keyboard` can be both an
 overlay and a bar widget without its toggle being rerouted.
 
+## Never link plugins and restart the shell in the same breath
+
+Development testing crashed Quickshell **five times** before the pattern was
+spotted. Every crash has the identical signature in the journal:
+
+```
+DEBUG qml: Local plugin changed, reloading: phone-bar
+DEBUG qml: Local plugin changed, reloading: phone-appgrid   (etc.)
+INFO: Exiting due to IPC request.
+ERROR: Quickshell has crashed under pid NNNNN
+```
+
+`omarchy-phone-plugins-link` creates N symlinks at once, and the shell's plugin
+file-watcher fires a live reload for each. Calling `omarchy-restart-shell`
+immediately after puts an engine teardown in the same second as those reloads.
+The backtrace is the collision: `QQuickRepeater::setModel` → `regenerate` →
+incubate a delegate → `QQmlComponent::create` → a `__dynamic_cast` inside
+Quickshell's own code → SIGSEGV, all of it triggered from a QML signal handler
+partway through object creation.
+
+Three things worth separating:
+
+- **It is not the port's QML.** QML should not be able to segfault the engine at
+  all, and the faulting frame is Quickshell's, casting an object that is being
+  destroyed underneath it. This is an upstream robustness bug.
+- **It is the test procedure that provokes it**, and a real install never does
+  this: plugins are laid down once and the session starts afterwards.
+  `omarchy-phone-install` is already correct — it links and then tells you to
+  restart rather than doing both.
+- **Nothing was lost.** Quickshell caught each one and relaunched itself
+  ("Quickshell has been restarted"), so the desktop recovered on its own; the
+  only trace was a crash notification.
+
+So when testing by hand: link, let the reload settle, *then* restart — or
+restart first and link after. Not both at once.
+

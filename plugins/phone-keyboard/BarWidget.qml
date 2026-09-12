@@ -31,7 +31,7 @@ BarWidget {
     // here (JetBrainsMono Nerd Font covers f000-f385). Left on the bar's own
     // family deliberately -- the omarchy icon font only carries e900-e907 and
     // has no keyboard glyph.
-    text: ""
+    text: "\uf11c"
 
     tooltipText: "On-screen keyboard"
 
