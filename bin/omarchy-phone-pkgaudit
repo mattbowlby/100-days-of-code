@@ -1,0 +1,138 @@
+#!/bin/bash
+
+# omarchy:summary=Audit Omarchy's package list against Arch Linux ARM aarch64.
+# omarchy:args=[--refresh]
+# omarchy:examples=omarchy-phone-pkgaudit
+
+# Answers "can Omarchy be installed on this phone's architecture, and what has
+# to be rebuilt first" from the actual repository databases rather than from
+# anyone's memory. Read-only apart from a cached copy of ALARM's databases.
+#
+# Three buckets come out:
+#   available     - in ALARM aarch64, install as-is
+#   skip          - missing, but x86 hardware or the x86 kernel; a phone does
+#                   not want it anyway
+#   optional      - desktop applications, not part of a phone session
+#   rebuild       - from Omarchy's own x86_64 repo, needs an aarch64 build
+#                   (except `any` packages, which install unchanged)
+
+set -uo pipefail
+
+OMARCHY_PATH="${OMARCHY_PATH:-/usr/share/omarchy}"
+MIRROR="${ALARM_MIRROR:-http://mirror.archlinuxarm.org/aarch64}"
+CACHE="${XDG_CACHE_HOME:-$HOME/.cache}/omarchy-phone/alarm"
+
+# Packages a phone has no use for even where an aarch64 build exists. Matched as
+# whole names. Kept explicit rather than pattern-matched: "intel" in a name is
+# not proof, and a silent skip of something load-bearing is the failure that
+# would matter.
+SKIP_PATTERNS='^(broadcom-wl|intel-lpmd|intel-media-driver|libva-intel-driver|thermald|vpl-gpu-rt|qemu-user-static-binfmt|linux|linux-headers|linux-ptl|linux-ptl-headers|nvidia-.*|lib32-.*|asusctl|dell-xps-touchpad-haptics|intel-ipu7-camera|macbook12-spi-driver-dkms|tuxedo-.*|yt6801-dkms|qmk-hid|limine-.*|asdcontrol|apple-bcm-firmware|apple-t2-audio-config|linux-t2|linux-t2-headers|t2fanrd|.*-debug)$'
+
+# Desktop applications. They would build for aarch64 in principle, but none is
+# part of a phone session and several are Electron or .NET, so listing them as
+# "must rebuild before you can start" overstates the work considerably.
+OPTIONAL_PATTERNS='^(obsidian|obs-studio|pinta|dotnet-runtime|localsend|mise-bin|cliamp|ttfx|aether|tobi-try)$'
+
+step() { printf '\n\033[1m%s\033[0m\n' "$1"; }
+
+refresh_db() {
+  mkdir -p "$CACHE"
+  local repo
+  for repo in core extra; do
+    if [[ ! -f "$CACHE/$repo.db" || ${1:-} == "--refresh" ]]; then
+      echo "  fetching $repo.db from $MIRROR" >&2
+      curl -sSL --max-time 120 -o "$CACHE/$repo.db" "$MIRROR/$repo/$repo.db" || {
+        echo "  could not fetch $repo.db" >&2
+        return 1
+      }
+    fi
+  done
+}
+
+alarm_packages() {
+  local tmp
+  tmp=$(mktemp -d)
+  tar xzf "$CACHE/core.db" -C "$tmp" 2>/dev/null
+  tar xzf "$CACHE/extra.db" -C "$tmp" 2>/dev/null
+  # Directory names are <name>-<version>-<rel>; strip the two trailing fields.
+  (cd "$tmp" && ls -d */ 2>/dev/null) | sed 's|/$||' | sed -E 's/-[^-]+-[^-]+$//' | sort -u
+  rm -rf "$tmp"
+}
+
+omarchy_packages() {
+  cat "$OMARCHY_PATH/install"/omarchy-*.packages 2>/dev/null \
+    | grep -vE '^\s*#|^\s*$' | tr -d ' ' | sort -u
+}
+
+refresh_db "${1:-}" || exit 1
+
+tmp=$(mktemp -d)
+trap 'rm -rf "$tmp"' EXIT
+alarm_packages > "$tmp/alarm"
+omarchy_packages > "$tmp/omarchy"
+
+available=0 skipped=0 optional=0 rebuild=0 rebuild_any=0
+: >"$tmp/skip" >"$tmp/optional" >"$tmp/rebuild" >"$tmp/rebuild_any"
+
+while read -r pkg; do
+  [[ -n $pkg ]] || continue
+  if grep -qx "$pkg" "$tmp/alarm"; then
+    available=$((available + 1))
+    continue
+  fi
+  if [[ $pkg =~ $SKIP_PATTERNS ]]; then
+    skipped=$((skipped + 1))
+    echo "  $pkg" >>"$tmp/skip"
+    continue
+  fi
+  if [[ $pkg =~ $OPTIONAL_PATTERNS ]]; then
+    optional=$((optional + 1))
+    echo "  $pkg" >>"$tmp/optional"
+    continue
+  fi
+  # Not in ALARM and not skippable: it has to come from somewhere. An `any`
+  # package installs unchanged; anything else needs an aarch64 build.
+  arch=$(pacman -Si "$pkg" 2>/dev/null | awk -F': +' '/^Architecture/{print $2; exit}')
+  if [[ $arch == any ]]; then
+    rebuild_any=$((rebuild_any + 1))
+    echo "  $pkg" >>"$tmp/rebuild_any"
+  else
+    rebuild=$((rebuild + 1))
+    echo "  $pkg (${arch:-unknown})" >>"$tmp/rebuild"
+  fi
+done < "$tmp/omarchy"
+
+total=$(wc -l < "$tmp/omarchy")
+
+step "Available in ALARM aarch64"
+echo "  $available of $total"
+
+step "Missing, but a phone does not want them"
+echo "  $skipped -- x86 hardware support, the x86 kernel, debug packages"
+sort "$tmp/skip" 2>/dev/null
+
+step "Desktop applications -- skip for a first boot"
+echo "  $optional"
+sort "$tmp/optional" 2>/dev/null
+
+step "Architecture-independent (install unchanged)"
+echo "  $rebuild_any"
+sort "$tmp/rebuild_any" 2>/dev/null
+
+step "Need an aarch64 rebuild"
+echo "  $rebuild"
+sort "$tmp/rebuild" 2>/dev/null
+
+step "Verdict"
+if [[ $rebuild -eq 0 ]]; then
+  echo "  Nothing to rebuild before a first boot."
+else
+  echo "  $rebuild package(s) to rebuild before a phone session is complete."
+fi
+for p in hyprland quickshell; do
+  if grep -qx "$p" "$tmp/alarm"; then
+    printf '    %-12s present in ALARM aarch64\n' "$p"
+  else
+    printf '    %-12s *** ABSENT -- this would be a blocker ***\n' "$p"
+  fi
+done
