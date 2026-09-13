@@ -69,19 +69,46 @@ the panel geometry in `install/devices/fajita.conf`, `DEVICE_GPU=freedreno`
    `omarchy-phone-device` matches the running device by its device-tree
    `compatible` string, so the profile should resolve by itself once booted.
 
-## The part nobody has checked
+## Does Omarchy run on aarch64? Mostly, yes
 
-Step 5 is where this stops being a documented path and starts being an open
-question. **Omarchy has never been installed on aarch64.** Its package list is
-206 packages: 162 come from Arch `core`/`extra`, which Arch Linux ARM mirrors;
-36 come from Omarchy's own x86_64 repo and would need rebuilding — though
-roughly a third of those are Apple T2, NVIDIA, Intel and Tuxedo drivers a phone
-simply skips. The `omarchy` package itself is `Architecture: any`, which is the
-encouraging part: its own content is architecture-neutral.
+This was the open question and it now has an answer, taken from Arch Linux ARM's
+own `core.db` and `extra.db` for aarch64 rather than from hope:
 
-Whether Arch ARM carries `hyprland` and `quickshell` for aarch64 is the single
-unanswered question, and it decides whether any of this runs. Both are in Arch's
-`extra` on x86_64. Check before committing to a weekend.
+**The two that decide it are both there.**
+
+| | ALARM aarch64 | this laptop |
+|---|---|---|
+| `hyprland` | 0.56.1-3 | 0.56.2-1 |
+| `quickshell` | 0.3.1-1 | 0.3.1-1 |
+
+Quickshell is the *same* version. Hyprland is one patch release behind, which
+matters only for the version-specific findings in `NOTES.md` — the
+`hl.gesture()` `fingers >= 2` limit was measured on 0.56.2 and should be
+re-checked on 0.56.1.
+
+**Of the 162 Omarchy packages that come from Arch `core`/`extra`, 149 are in
+ALARM aarch64.** The 13 that are missing are not a problem:
+
+- *x86 hardware support a phone has no use for* — `broadcom-wl`, `intel-lpmd`,
+  `intel-media-driver`, `libva-intel-driver`, `thermald`, `vpl-gpu-rt`,
+  `qemu-user-static-binfmt`
+- *the x86 kernel* — `linux`, `linux-headers`, correctly absent, because the
+  device boots postmarketOS's fajita kernel instead
+- *desktop applications not built for ARM* — `obsidian`, `obs-studio`, `pinta`,
+  `dotnet-runtime`
+
+Not one of them is load-bearing for the session or the shell.
+
+That leaves the 36 packages from Omarchy's own x86_64 repo. Roughly a third are
+Apple T2, NVIDIA, Intel and Tuxedo drivers a phone skips outright; the rest are
+Omarchy's own small apps and fonts, and the `omarchy` package itself is
+`Architecture: any`. Those need rebuilding for aarch64, which is work, but it is
+ordinary packaging work rather than a porting problem.
+
+**So the honest verdict: nothing found so far blocks this.** It has still never
+been run, and "the packages exist" is a long way from "it boots and the panel
+lights up" — but the failure mode everyone feared, that the compositor or shell
+simply would not exist for ARM, is not the one you have.
 
 ## Not an iPhone
 
