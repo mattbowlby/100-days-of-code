@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 1,
+  "id": "dev.omarchyphone.home",
+  "name": "Phone Home Screen",
+  "version": "0.1.0",
+  "author": "Omarchy Phone",
+  "description": "Paged home screen and dock under every window; every app on the same frosted tile.",
+  "kinds": [
+    "overlay",
+    "menu"
+  ],
+  "keepLoaded": true,
+  "entryPoints": {
+    "overlay": "Home.qml"
+  }
+}

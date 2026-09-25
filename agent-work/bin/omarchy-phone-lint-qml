@@ -72,11 +72,12 @@ done
 # provably zero warnings on upstream's own Ui/Button.qml, Ui/Panel.qml and
 # Commons/Style.qml, so any warning here is a finding and should fail -- a check
 # that cannot fail is not a check.
+status=0
 output=$("$QMLLINT" \
   -I "$farm" \
   --missing-property disable \
   --uncreatable-type disable \
-  "${files[@]}" 2>&1) || true
+  "${files[@]}" 2>&1) || status=$?
 
 if [[ -n $output ]]; then
   printf '%s\n' "$output"
@@ -86,6 +87,14 @@ if [[ -n $output ]]; then
     echo "$warnings warning(s) in ${#files[@]} file(s)" >&2
     exit 1
   fi
+fi
+
+# A non-zero exit with no warnings is qmllint refusing to run at all -- an older
+# Qt's qmllint rejects the category options above with "Unknown option" and
+# lints nothing. That must not read as clean.
+if ((status != 0)); then
+  echo "qmllint exited $status without linting; is it older than the options above?" >&2
+  exit 1
 fi
 
 echo "clean: ${#files[@]} file(s)"
