@@ -68,10 +68,11 @@ done
   exit 0
 }
 
-# qmllint exits 0 even when it warns. The baseline under these settings is
-# provably zero warnings on upstream's own Ui/Button.qml, Ui/Panel.qml and
-# Commons/Style.qml, so any warning here is a finding and should fail -- a check
-# that cannot fail is not a check.
+# Warnings are counted here rather than read off the exit code, because qmllint's
+# exit code on warnings differs between Qt releases (0 on some, 255 on others).
+# The baseline under these settings is provably zero warnings on upstream's own
+# Ui/Button.qml, Ui/Panel.qml and Commons/Style.qml, so any warning here is a
+# finding and should fail -- a check that cannot fail is not a check.
 status=0
 output=$("$QMLLINT" \
   -I "$farm" \
@@ -89,11 +90,12 @@ if [[ -n $output ]]; then
   fi
 fi
 
-# A non-zero exit with no warnings is qmllint refusing to run at all -- an older
-# Qt's qmllint rejects the category options above with "Unknown option" and
-# lints nothing. That must not read as clean.
+# A non-zero exit with no warnings counted is still a failure. qmllint prints a
+# syntax error without a "Warning:" prefix, and an older Qt's qmllint rejects
+# the category options above with "Unknown option" and lints nothing at all.
+# Neither may read as clean.
 if ((status != 0)); then
-  echo "qmllint exited $status without linting; is it older than the options above?" >&2
+  echo "qmllint exited $status with no warnings counted (a syntax error, or a qmllint too old for the options above)" >&2
   exit 1
 fi
 
