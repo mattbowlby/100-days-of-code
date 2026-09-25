@@ -1,0 +1,91 @@
+#!/bin/bash
+
+# omarchy:summary=Lint the phone's QML against the installed Omarchy shell.
+# omarchy:args=[FILE|DIR ...]
+# omarchy:examples=omarchy-phone-lint-qml plugins/phone-bar
+
+set -euo pipefail
+
+# qmllint ships with qt6-declarative but is not on PATH on Arch.
+QMLLINT=${QMLLINT:-/usr/lib/qt6/bin/qmllint}
+OMARCHY_PATH="${OMARCHY_PATH:-/usr/share/omarchy}"
+OMARCHY_PHONE_PATH="${OMARCHY_PHONE_PATH:-$(dirname "$(dirname "$(readlink -f "$0")")")}"
+
+[[ -x $QMLLINT ]] || {
+  echo "No qmllint at $QMLLINT (install qt6-declarative, or set QMLLINT)" >&2
+  exit 1
+}
+
+# The shell's own modules are named qs.Commons, qs.Ui and so on, which QML
+# resolves as <import path>/qs/Commons/. Quickshell registers the config root as
+# `qs` itself at runtime; qmllint knows nothing about that, so give it a
+# directory whose only entry is a `qs` symlink to the installed shell. Without
+# this every `import qs.Commons` fails and the whole file degenerates into
+# unqualified-access noise.
+farm=$(mktemp -d)
+trap 'rm -rf "$farm"' EXIT
+ln -s "$OMARCHY_PATH/shell" "$farm/qs"
+
+# Two categories are disabled because they are wrong here, not because they are
+# inconvenient:
+#   missing-property  - Style's nested tokens (Style.font.body, Style.spacing.*)
+#                       are runtime-built QtObjects, so static analysis cannot
+#                       see their members. Upstream's own Ui/ is clean only with
+#                       this off.
+#   uncreatable-type  - Quickshell's PanelWindow is instantiated by the engine at
+#                       runtime; qmllint cannot know that and flags every use.
+# Everything else stays on. Upstream's Ui/Button.qml, Ui/Panel.qml and
+# Commons/Style.qml all report zero warnings under exactly these settings, so a
+# warning on phone QML means something.
+# With no arguments, lint everything the port owns. A missing plugins/ then
+# means "nothing written yet", which is not an error; a path the caller named
+# themselves and got wrong is.
+targets=("$@")
+default_run=false
+if [[ ${#targets[@]} -eq 0 ]]; then
+  targets=("$OMARCHY_PHONE_PATH/plugins")
+  default_run=true
+fi
+
+files=()
+for target in "${targets[@]}"; do
+  if [[ -d $target ]]; then
+    while IFS= read -r -d '' file; do files+=("$file"); done \
+      < <(find "$target" -name '*.qml' -print0)
+  elif [[ -e $target ]]; then
+    files+=("$target")
+  elif [[ $default_run == true ]]; then
+    echo "No QML yet under $target"
+    exit 0
+  else
+    echo "No such file or directory: $target" >&2
+    exit 1
+  fi
+done
+
+[[ ${#files[@]} -gt 0 ]] || {
+  echo "No .qml files to lint"
+  exit 0
+}
+
+# qmllint exits 0 even when it warns. The baseline under these settings is
+# provably zero warnings on upstream's own Ui/Button.qml, Ui/Panel.qml and
+# Commons/Style.qml, so any warning here is a finding and should fail -- a check
+# that cannot fail is not a check.
+output=$("$QMLLINT" \
+  -I "$farm" \
+  --missing-property disable \
+  --uncreatable-type disable \
+  "${files[@]}" 2>&1) || true
+
+if [[ -n $output ]]; then
+  printf '%s\n' "$output"
+  warnings=$(grep -c '^Warning:' <<<"$output" || true)
+  if [[ ${warnings:-0} -gt 0 ]]; then
+    echo
+    echo "$warnings warning(s) in ${#files[@]} file(s)" >&2
+    exit 1
+  fi
+fi
+
+echo "clean: ${#files[@]} file(s)"

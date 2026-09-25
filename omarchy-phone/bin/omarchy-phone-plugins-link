@@ -1,0 +1,86 @@
+#!/bin/bash
+
+# omarchy:summary=Link this checkout's shell plugins into ~/.config/omarchy/plugins.
+# omarchy:args=[--unlink|--status]
+# omarchy:examples=omarchy-phone-plugins-link --status
+
+set -euo pipefail
+
+OMARCHY_PHONE_PATH="${OMARCHY_PHONE_PATH:-$(dirname "$(dirname "$(readlink -f "$0")")")}"
+SOURCE_DIR="$OMARCHY_PHONE_PATH/plugins"
+PLUGINS_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/omarchy/plugins"
+
+# PluginRegistry scans ~/.config/omarchy/plugins, so linking rather than copying
+# means an edit in the checkout is live on the next shell restart with nothing to
+# re-sync.
+link_all() {
+  mkdir -p "$PLUGINS_DIR"
+
+  local plugin name target
+  for plugin in "$SOURCE_DIR"/*/; do
+    [[ -f "$plugin/manifest.json" ]] || continue
+    name=$(basename "$plugin")
+    target="$PLUGINS_DIR/$name"
+
+    if [[ -L $target ]]; then
+      ln -sfn "${plugin%/}" "$target"
+      echo "relinked $name"
+    elif [[ -e $target ]]; then
+      # Someone's real plugin directory is sitting on the name. Refuse rather
+      # than move it aside: losing a plugin the user wrote is worse than a
+      # failed link.
+      echo "skipped $name: $target exists and is not a symlink" >&2
+    else
+      ln -s "${plugin%/}" "$target"
+      echo "linked $name"
+    fi
+  done
+}
+
+# Only ever removes symlinks that point back into this checkout, so a real
+# plugin directory and a link to some other checkout both survive.
+unlink_all() {
+  [[ -d $PLUGINS_DIR ]] || return 0
+
+  local target name resolved
+  for target in "$PLUGINS_DIR"/*; do
+    [[ -L $target ]] || continue
+    name=$(basename "$target")
+    resolved=$(readlink -f "$target" || true)
+    if [[ $resolved == "$SOURCE_DIR"/* ]]; then
+      rm -- "$target"
+      echo "unlinked $name"
+    fi
+  done
+}
+
+status() {
+  local target name resolved
+  printf '%-18s %s\n' "plugins dir" "$PLUGINS_DIR"
+  [[ -d $PLUGINS_DIR ]] || { echo "(not present)"; return 0; }
+
+  for target in "$PLUGINS_DIR"/*; do
+    [[ -e $target || -L $target ]] || continue
+    name=$(basename "$target")
+    if [[ -L $target ]]; then
+      resolved=$(readlink -f "$target" || echo "BROKEN")
+      if [[ $resolved == "$SOURCE_DIR"/* ]]; then
+        printf '%-18s -> %s (this checkout)\n' "$name" "$resolved"
+      else
+        printf '%-18s -> %s\n' "$name" "$resolved"
+      fi
+    else
+      printf '%-18s %s\n' "$name" "(real directory)"
+    fi
+  done
+}
+
+case ${1:-} in
+"") link_all ;;
+--unlink) unlink_all ;;
+--status) status ;;
+*)
+  echo "Unknown option for omarchy-phone-plugins-link: $1" >&2
+  exit 1
+  ;;
+esac

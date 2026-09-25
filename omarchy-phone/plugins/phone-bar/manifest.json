@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "id": "dev.omarchyphone.bar",
+  "name": "Phone Status Bar",
+  "version": "0.1.0",
+  "author": "Omarchy Phone",
+  "description": "Portrait status bar: clock and battery, sized for a phone panel.",
+  "kinds": [
+    "bar"
+  ],
+  "entryPoints": {
+    "bar": "Bar.qml"
+  }
+}

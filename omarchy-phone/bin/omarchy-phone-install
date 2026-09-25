@@ -1,0 +1,127 @@
+#!/bin/bash
+
+# omarchy:summary=Install the Omarchy Phone session onto this device.
+# omarchy:args=[--dry-run|--apply] [--force]
+# omarchy:examples=omarchy-phone-install --dry-run
+
+# Dry run is the default. --apply is what writes, and it refuses to run on a
+# machine whose device profile does not resolve unless --force is given: this
+# replaces ~/.config/hypr/*.lua, and doing that to somebody's laptop because
+# they ran the wrong command in the wrong checkout is not a recoverable
+# surprise. Everything it replaces is backed up first regardless.
+
+set -euo pipefail
+
+OMARCHY_PHONE_PATH="${OMARCHY_PHONE_PATH:-$(dirname "$(dirname "$(readlink -f "$0")")")}"
+CONFIG_HOME="${XDG_CONFIG_HOME:-$HOME/.config}"
+HYPR_DIR="$CONFIG_HOME/hypr"
+SHELL_CONFIG="$CONFIG_HOME/omarchy/shell.json"
+BACKUP_DIR="${XDG_STATE_HOME:-$HOME/.local/state}/omarchy-phone/backup-$(date +%Y%m%d-%H%M%S)"
+
+APPLY=0
+FORCE=0
+for arg in "$@"; do
+  case $arg in
+  --apply) APPLY=1 ;;
+  --dry-run) APPLY=0 ;;
+  --force) FORCE=1 ;;
+  *)
+    echo "Unknown option for omarchy-phone-install: $arg" >&2
+    exit 1
+    ;;
+  esac
+done
+
+say() { if ((APPLY)); then printf '  %s\n' "$1"; else printf '  would %s\n' "$1"; fi; }
+step() { printf '\n\033[1m%s\033[0m\n' "$1"; }
+
+# --- guard -------------------------------------------------------------------
+if codename=$("$OMARCHY_PHONE_PATH/bin/omarchy-phone-device" 2>/dev/null); then
+  echo "Device: $codename ($("$OMARCHY_PHONE_PATH/bin/omarchy-phone-device" --field DEVICE_NAME))"
+else
+  echo "No device profile matches this machine." >&2
+  if ((APPLY)) && ! ((FORCE)); then
+    cat >&2 <<'MSG'
+Refusing to --apply: this replaces ~/.config/hypr/*.lua with a phone session,
+and on a desktop or laptop that is not what you want. Re-run with --force if
+you really mean it, or set the override that omarchy-phone-diagnose prints.
+MSG
+    exit 1
+  fi
+fi
+
+((APPLY)) || echo "(dry run -- nothing will be written; pass --apply to install)"
+
+# --- session modules ---------------------------------------------------------
+step "Hyprland session"
+if ((APPLY)); then
+  mkdir -p "$BACKUP_DIR/hypr"
+fi
+for source in "$OMARCHY_PHONE_PATH"/config/hypr/*.lua; do
+  name=$(basename "$source")
+  target="$HYPR_DIR/$name"
+  if [[ -f $target ]] && ! cmp -s "$source" "$target"; then
+    say "back up $name to ${BACKUP_DIR#"$HOME"/}/hypr/"
+    ((APPLY)) && cp -a "$target" "$BACKUP_DIR/hypr/$name"
+  fi
+  say "install $name"
+  if ((APPLY)); then
+    mkdir -p "$HYPR_DIR"
+    cp -a "$source" "$target"
+  fi
+done
+
+# --- shell plugins -----------------------------------------------------------
+step "Shell plugins"
+if ((APPLY)); then
+  "$OMARCHY_PHONE_PATH/bin/omarchy-phone-plugins-link"
+else
+  for dir in "$OMARCHY_PHONE_PATH"/plugins/*/; do
+    [[ -f "$dir/manifest.json" ]] || continue
+    say "link $(basename "$dir") into $CONFIG_HOME/omarchy/plugins"
+  done
+fi
+
+# --- shell config ------------------------------------------------------------
+step "Shell config"
+bar_id=$(jq -r '.id' "$OMARCHY_PHONE_PATH/plugins/phone-bar/manifest.json" 2>/dev/null || echo "")
+# Every non-bar plugin has to be listed in plugins[] or the host never enables
+# it; bar plugins are selected by bar.id instead. See NOTES.md.
+mapfile -t overlay_ids < <(
+  for manifest in "$OMARCHY_PHONE_PATH"/plugins/*/manifest.json; do
+    jq -r 'select((.kinds // []) | index("bar") | not) | .id' "$manifest" 2>/dev/null
+  done
+)
+
+if [[ -r $SHELL_CONFIG ]]; then
+  say "back up shell.json"
+  say "set bar.id = $bar_id"
+  for id in "${overlay_ids[@]}"; do
+    [[ -n $id ]] && say "add $id to plugins[]"
+  done
+
+  if ((APPLY)); then
+    mkdir -p "$BACKUP_DIR"
+    cp -a "$SHELL_CONFIG" "$BACKUP_DIR/shell.json"
+    tmp=$(mktemp)
+    jq --arg bar "$bar_id" --argjson ids "$(printf '%s\n' "${overlay_ids[@]}" | jq -Rc 'select(length>0)' | jq -sc .)" '
+      .bar.id = $bar
+      | .plugins = ((.plugins // []) + [$ids[] | {id: .}] | unique_by(.id))
+    ' "$SHELL_CONFIG" >"$tmp" && mv "$tmp" "$SHELL_CONFIG"
+  fi
+else
+  say "create $SHELL_CONFIG (absent)"
+fi
+
+# --- system ------------------------------------------------------------------
+step "System"
+say "run install/hardware/power-key.sh (logind long-press -> poweroff)"
+((APPLY)) && bash "$OMARCHY_PHONE_PATH/install/hardware/power-key.sh"
+
+step "Done"
+if ((APPLY)); then
+  echo "  Backup: $BACKUP_DIR"
+  echo "  Restart the session to pick it up (omarchy-restart-shell, then re-login)."
+else
+  echo "  Nothing was written. Re-run with --apply to install."
+fi

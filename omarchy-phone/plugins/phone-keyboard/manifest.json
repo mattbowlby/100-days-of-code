@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 1,
+  "id": "dev.omarchyphone.keyboard",
+  "name": "Phone On-Screen Keyboard",
+  "version": "0.1.0",
+  "author": "Omarchy Phone",
+  "description": "Thumb-sized on-screen keyboard; types through the Wayland virtual-keyboard protocol.",
+  "kinds": [
+    "overlay",
+    "bar-widget"
+  ],
+  "entryPoints": {
+    "overlay": "Keyboard.qml",
+    "barWidget": "BarWidget.qml"
+  }
+}

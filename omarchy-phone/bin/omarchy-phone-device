@@ -1,0 +1,104 @@
+#!/bin/bash
+
+# omarchy:summary=Resolve the Omarchy Phone device profile for this machine.
+# omarchy:args=[--profile|--field <KEY>|--status]
+# omarchy:examples=omarchy-phone-device --field DEVICE_SCALE
+
+set -euo pipefail
+
+OMARCHY_PHONE_PATH="${OMARCHY_PHONE_PATH:-$(dirname "$(dirname "$(readlink -f "$0")")")}"
+DEVICES_DIR="$OMARCHY_PHONE_PATH/install/devices"
+
+# Written by the installer once the device is known, so a phone whose device
+# tree we can't match still resolves after a manual install.
+OVERRIDE_FILE="${XDG_STATE_HOME:-$HOME/.local/state}/omarchy-phone/device"
+
+DT_COMPATIBLE=/sys/firmware/devicetree/base/compatible
+
+field_from() {
+  local file=$1 key=$2 value
+
+  value=$(grep -m1 -E "^$key=" "$file") || {
+    echo "No $key in $(basename "$file")" >&2
+    return 1
+  }
+  value=${value#*=}
+
+  # Profiles only ever use plain double quotes, so stripping a matched pair is
+  # the whole of the unquoting we need.
+  value=${value%\"}
+  echo "${value#\"}"
+}
+
+detect_codename() {
+  local override compatible profile want
+
+  if [[ -r $OVERRIDE_FILE ]]; then
+    read -r override <"$OVERRIDE_FILE" || true
+    if [[ -n ${override:-} ]]; then
+      echo "$override"
+      return 0
+    fi
+  fi
+
+  # x86 and any non-devicetree machine has no such node, which is a plain "not
+  # this device", not an error worth printing.
+  [[ -r $DT_COMPATIBLE ]] || return 1
+
+  # The node is NUL-separated and unterminated; tr gives one name a line.
+  compatible=$(tr '\0' '\n' <"$DT_COMPATIBLE")
+  [[ -n $compatible ]] || return 1
+
+  for profile in "$DEVICES_DIR"/*.conf; do
+    [[ -r $profile ]] || continue
+
+    # Match the profile's own compatible string rather than its file name, so a
+    # device is recognised under any of the names its device tree advertises.
+    want=$(field_from "$profile" DEVICE_COMPATIBLE) || continue
+    if [[ -n $want ]] && grep -qxF "$want" <<<"$compatible"; then
+      basename "$profile" .conf
+      return 0
+    fi
+  done
+
+  return 1
+}
+
+CODENAME=$(detect_codename) || {
+  echo "No device profile matched this machine" >&2
+  exit 1
+}
+
+PROFILE="$DEVICES_DIR/$CODENAME.conf"
+[[ -r $PROFILE ]] || {
+  echo "No device profile at $PROFILE" >&2
+  exit 1
+}
+
+case ${1:-} in
+"")
+  echo "$CODENAME"
+  ;;
+--profile)
+  cat "$PROFILE"
+  ;;
+--field)
+  [[ -n ${2:-} ]] || {
+    echo "Usage: omarchy-phone-device --field <KEY>" >&2
+    exit 1
+  }
+  field_from "$PROFILE" "$2"
+  ;;
+--status)
+  jq -cn \
+    --arg codename "$CODENAME" \
+    --arg name "$(field_from "$PROFILE" DEVICE_NAME)" \
+    --arg soc "$(field_from "$PROFILE" DEVICE_SOC)" \
+    --arg base "$(field_from "$PROFILE" DEVICE_BASE)" \
+    '{codename:$codename, name:$name, soc:$soc, base:$base}'
+  ;;
+*)
+  echo "Unknown option for omarchy-phone-device: $1" >&2
+  exit 1
+  ;;
+esac

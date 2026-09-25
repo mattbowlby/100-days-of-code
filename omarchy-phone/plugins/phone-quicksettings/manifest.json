@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "id": "dev.omarchyphone.quicksettings",
+  "name": "Phone Quick Settings",
+  "version": "0.1.0",
+  "author": "Omarchy Phone",
+  "description": "Thumb-sized sheet that opens Omarchy's own audio, network, bluetooth, power and display panels.",
+  "kinds": [
+    "overlay"
+  ],
+  "entryPoints": {
+    "overlay": "QuickSettings.qml"
+  }
+}

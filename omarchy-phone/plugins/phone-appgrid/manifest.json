@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "id": "dev.omarchyphone.appgrid",
+  "name": "Phone App Grid",
+  "version": "0.1.0",
+  "author": "Omarchy Phone",
+  "description": "Full-screen, thumb-sized app launcher for a phone panel.",
+  "kinds": [
+    "overlay"
+  ],
+  "entryPoints": {
+    "overlay": "AppGrid.qml"
+  }
+}
