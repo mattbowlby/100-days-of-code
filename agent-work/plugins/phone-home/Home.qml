@@ -31,10 +31,17 @@ Item {
 
   readonly property var appLibrary: shell ? shell.appLibrary : null
 
-  // The surface's logical size, written by the panel below once it is mapped.
-  // The defaults are the reference phone, so nothing divides by zero before.
-  property real surfaceWidth: 360
-  property real surfaceHeight: 780
+  // The surface's logical size. Until the panel below is mapped it reads the
+  // reference phone's, so nothing divides by zero before then.
+  readonly property real surfaceWidth: panel.width > 0 ? panel.width : 360
+  readonly property real surfaceHeight: panel.height > 0 ? panel.height : 780
+
+  // Where the status bar is, from the host's scalar view of it, so the grid and
+  // the dock keep clear of whichever edge it is on.
+  readonly property var barState: shell ? shell.bar : null
+  readonly property bool barAtBottom: !!barState && barState.position === "bottom"
+  readonly property int barSpace: !barState ? Style.bar.sizeHorizontal
+    : (barState.barHidden ? 0 : (barState.barSize > 0 ? barState.barSize : Style.bar.sizeHorizontal))
 
   readonly property int columns: 4
   readonly property int dockSlots: 4
@@ -293,25 +300,44 @@ Item {
   // ------------------------------------------------------------------ pages
   //
   // The pager scrolls by spread: one page on a phone, two side by side on an
-  // unfolded screen. Rows are however many whole cells fit, 3 to 6.
-  // The dock clears phone-bar's bottom gesture strip, so a swipe up for home
-  // never starts on an icon.
-  readonly property int gestureClearance: Style.space(16) + Style.spacing.lg
-  readonly property int rows: Math.max(3, Math.min(6, Math.floor(pagerHeight / cellHeight)))
-  property real pagerHeight: 0
+  // unfolded screen. Rows are however many whole cells fit, up to six, and
+  // share the height between them evenly, as iOS spaces its rows.
+  readonly property int rows: Math.max(1, Math.min(6, Math.floor(pager.height / cellHeight)))
   readonly property int perPage: rows * columns
-  readonly property int pagesPerSpread: wide ? 2 : 1
   readonly property int pageCount: Math.max(1, Math.ceil(gridApps.length / perPage))
+
+  // A lone page on an unfolded screen is centred rather than left beside an
+  // empty one; two pages or more open as a book.
+  readonly property int pagesPerSpread: wide && pageCount > 1 ? 2 : 1
   readonly property int spreadCount: Math.ceil(pageCount / pagesPerSpread)
+
+  // The bottom gesture strip is phone-bar's (see its EdgeSwipe); the dock sits
+  // clear of it so a swipe up for home never starts on an icon.
+  readonly property int gestureClearance: Style.space(16) + Style.spacing.lg
 
   function pageApps(page) {
     return gridApps.slice(page * perPage, (page + 1) * perPage)
   }
 
-  // Asked for while already home -- the host's toggle, or a second swipe up --
-  // the pager returns to the first page, as iOS's home button does.
+  // The first page on screen, kept across anything that rebuilds the pager's
+  // model -- unfolding, rotating, an install that adds a page. The model is a
+  // count, and a new count sends a ListView back to its first item.
+  property int anchorPage: 0
+
+  function restorePage() {
+    var spread = Math.min(Math.floor(anchorPage / pagesPerSpread), spreadCount - 1)
+    pager.currentIndex = Math.max(0, spread)
+  }
+
+  onSpreadCountChanged: Qt.callLater(restorePage)
+  onPagesPerSpreadChanged: Qt.callLater(restorePage)
+
+  // Asked for while already home -- a second swipe up -- the pager returns to
+  // the first page, as iOS's home button does. currentIndex rather than a
+  // position call, so the page dots follow.
   function open(payloadJson) {
-    pager.positionViewAtBeginning()
+    anchorPage = 0
+    pager.currentIndex = 0
   }
 
   // Never closes; see the header. The host may still call this when it hides
@@ -330,37 +356,34 @@ Item {
 
     // Ignore rather than reserve: this is the backdrop windows tile over, and
     // it must neither push them aside nor be pushed by the bar. The bar's strip
-    // is kept clear by the top margin below instead, as phone-appgrid did.
+    // is kept clear by the margins below instead, as phone-appgrid did.
     exclusionMode: ExclusionMode.Ignore
-
-    onWidthChanged: root.surfaceWidth = width
-    onHeightChanged: root.surfaceHeight = height
-    Component.onCompleted: {
-      root.surfaceWidth = width
-      root.surfaceHeight = height
-    }
 
     ListView {
       id: pager
 
       anchors.top: parent.top
-      anchors.topMargin: Style.bar.sizeHorizontal + Style.spacing.xxl
+      anchors.topMargin: (root.barAtBottom ? 0 : root.barSpace) + Style.spacing.lg
       anchors.left: parent.left
       anchors.right: parent.right
       anchors.bottom: dots.top
-      onHeightChanged: root.pagerHeight = height
 
       orientation: ListView.Horizontal
       snapMode: ListView.SnapOneItem
       highlightRangeMode: ListView.StrictlyEnforceRange
       boundsBehavior: Flickable.StopAtBounds
+      clip: true
       // A beat before a tile shows its press, so a swipe that starts on an icon
       // does not flash it first. Short enough that a tap still feels instant.
       pressDelay: 80
       // Every spread is built and kept: a phone's worth of apps is a few pages,
       // and a spread built mid-swipe is a dropped frame under the thumb.
-      cacheBuffer: width * 2
+      cacheBuffer: width * Math.max(1, root.spreadCount - 1)
       model: root.spreadCount
+
+      // Only a swipe moves the anchor; a model reset also changes currentIndex,
+      // and that must not overwrite the page being restored.
+      onCurrentIndexChanged: if (moving) root.anchorPage = currentIndex * root.pagesPerSpread
 
       delegate: Row {
         id: spread
@@ -369,6 +392,7 @@ Item {
 
         width: pager.width
         height: pager.height
+        leftPadding: (width - root.pagesPerSpread * root.pageWidth) / 2
 
         Repeater {
           model: root.pagesPerSpread
@@ -383,11 +407,16 @@ Item {
             height: spread.height
 
             Grid {
+              // The height left after whole rows, shared out: half a gap above
+              // the first row, a full one between rows.
+              readonly property int gap: Math.floor((parent.height - root.rows * root.cellHeight) / root.rows)
+
               anchors.top: parent.top
+              anchors.topMargin: gap / 2
               anchors.horizontalCenter: parent.horizontalCenter
               columns: root.columns
               columnSpacing: 0
-              rowSpacing: 0
+              rowSpacing: gap
 
               Repeater {
                 model: root.pageApps(page.pageIndex)
@@ -407,12 +436,14 @@ Item {
     }
 
     // Where you are among the pages, drawn only when there is more than one.
+    // Transparent rather than hidden when there is one, so it keeps its height
+    // and the rows do not jump when a second page arrives.
     Row {
       id: dots
 
       anchors.horizontalCenter: parent.horizontalCenter
-      anchors.bottom: dock.top
-      anchors.bottomMargin: Style.spacing.lg
+      anchors.bottom: dock.visible ? dock.top : parent.bottom
+      anchors.bottomMargin: dock.visible ? Style.spacing.lg : dock.anchors.bottomMargin
       height: Style.space(8)
       spacing: Style.space(7)
       opacity: root.spreadCount > 1 ? 1 : 0
@@ -432,9 +463,8 @@ Item {
       }
     }
 
-    // The dock: the same tiles, unlabelled, on one frosted shelf. It clears the
-    // bottom gesture strip (phone-bar owns that edge) so a swipe up for home
-    // never starts on an icon.
+    // The dock: the same tiles, unlabelled, on one frosted shelf, clear of the
+    // bottom gesture strip and of the bar when the bar is at the bottom.
     Rectangle {
       id: dock
 
@@ -442,10 +472,11 @@ Item {
 
       anchors.horizontalCenter: parent.horizontalCenter
       anchors.bottom: parent.bottom
-      anchors.bottomMargin: root.gestureClearance
+      anchors.bottomMargin: root.gestureClearance + (root.barAtBottom ? root.barSpace : 0)
       width: Math.min(parent.width - root.pagePadding * 2,
         root.dockSlots * root.tileSize + (root.dockSlots + 1) * inset * 2)
       height: root.tileSize + inset * 2
+      // Concentric with the tiles inside it.
       radius: root.tileRadius + inset
       visible: root.dockApps.length > 0
 
@@ -453,9 +484,12 @@ Item {
       border.width: Math.max(1, Style.space(1))
       border.color: Util.alpha(Color.foreground, 0.14)
 
+      // Fewer apps than slots spread across the whole shelf, as iOS's do,
+      // rather than huddling in the middle of it.
       Row {
         anchors.centerIn: parent
-        spacing: (dock.width - dock.inset * 2 - root.dockSlots * root.tileSize) / (root.dockSlots - 1)
+        spacing: (dock.width - dock.inset * 2 - root.dockApps.length * root.tileSize)
+          / Math.max(1, root.dockApps.length - 1)
 
         Repeater {
           model: root.dockApps
