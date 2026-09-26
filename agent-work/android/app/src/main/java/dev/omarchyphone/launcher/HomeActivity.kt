@@ -18,6 +18,7 @@ import androidx.compose.runtime.setValue
 class HomeActivity : ComponentActivity() {
     private lateinit var repository: AppRepository
     private lateinit var settings: LauncherSettings
+    private lateinit var controls: Controls
 
     // Counts Home presses while the home screen is already showing, which
     // HomeScreen answers by going back to the first page.
@@ -38,6 +39,7 @@ class HomeActivity : ComponentActivity() {
         enableEdgeToEdge()
         repository = AppRepository(this)
         settings = LauncherSettings(this)
+        controls = Controls(this)
         onBackPressedDispatcher.addCallback(this, back)
         density = resources.configuration.densityDpi
         repository.start()
@@ -53,6 +55,7 @@ class HomeActivity : ComponentActivity() {
                     uninstall = { uninstall(it) },
                 ),
                 onSearchOpenChanged = { open -> setSearchOpen(open) },
+                controls = controls,
             )
         }
     }
@@ -60,10 +63,12 @@ class HomeActivity : ComponentActivity() {
     override fun onStart() {
         super.onStart()
         windowManager.addCrossWindowBlurEnabledListener(mainExecutor, blurListener)
+        controls.start()
     }
 
     override fun onStop() {
         windowManager.removeCrossWindowBlurEnabledListener(blurListener)
+        controls.stop()
         super.onStop()
     }
 

@@ -128,6 +128,14 @@ class ScreenshotTest {
     }
 
     @Test
+    fun controlPanel() {
+        val controls = Controls(paparazzi.context)
+        paparazzi.snapshot {
+            OnWallpaper { ControlPanel(controls, themeById("tokyo-night"), tile = 64.androidx(), onClose = {}) }
+        }
+    }
+
+    @Test
     fun themePicker() {
         paparazzi.snapshot {
             OnWallpaper { ThemePicker(themeById("tokyo-night"), onPick = {}, onClose = {}) }

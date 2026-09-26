@@ -80,10 +80,17 @@ fun HomeScreen(
     actions: HomeActions,
     homePresses: Int,
     onSearchOpenChanged: (Boolean) -> Unit,
+    controls: Controls? = null,
 ) {
     val theme = themeById(settings.themeId)
     var searching by remember { mutableStateOf(false) }
     var pickingTheme by remember { mutableStateOf(false) }
+    var controlling by remember { mutableStateOf(false) }
+
+    fun openControls() {
+        controls?.refresh()
+        controlling = controls != null
+    }
 
     val byKey = remember(apps) { apps.associateBy { it.key } }
     // Only apps still installed count: a docked app that was uninstalled would
@@ -102,9 +109,10 @@ fun HomeScreen(
 
     // Back closes whatever sheet is open, and only that. With none open it
     // falls through to HomeActivity, which keeps Back from leaving home.
-    BackHandler(enabled = searching || pickingTheme) {
+    BackHandler(enabled = searching || pickingTheme || controlling) {
         setSearching(false)
         pickingTheme = false
+        controlling = false
     }
 
     // The keyboard is left out: it covers the pages rather than squeezing
@@ -132,6 +140,7 @@ fun HomeScreen(
             if (homePresses > 0) {
                 setSearching(false)
                 pickingTheme = false
+                controlling = false
                 pagerState.animateScrollToPage(0)
             }
         }
@@ -143,13 +152,23 @@ fun HomeScreen(
                     .weight(1f)
                     .fillMaxWidth()
                     // Down on the pages opens search, as a swipe down on iOS's
-                    // home screen does. Sideways stays the pager's.
+                    // home screen does -- or, started near the top right, the
+                    // control panel, where iOS keeps its control centre.
+                    // Sideways stays the pager's.
                     .pointerInput(Unit) {
                         var dragged = 0f
+                        var fromCorner = false
                         detectVerticalDragGestures(
-                            onDragStart = { dragged = 0f },
+                            onDragStart = { start ->
+                                dragged = 0f
+                                fromCorner = start.x > size.width * 0.6f && start.y < 96.dp.toPx()
+                            },
                             onVerticalDrag = { _, dy -> dragged += dy },
-                            onDragEnd = { if (dragged > 56.dp.toPx()) setSearching(true) },
+                            onDragEnd = {
+                                if (dragged > 56.dp.toPx()) {
+                                    if (fromCorner && controls != null) openControls() else setSearching(true)
+                                }
+                            },
                         )
                     }
                     // A long press on the wallpaper, between apps: themes.
@@ -195,6 +214,12 @@ fun HomeScreen(
                 onLaunch = { app -> setSearching(false); actions.launch(app) },
                 onClose = { setSearching(false) },
             )
+        }
+
+        if (controls != null) {
+            AnimatedVisibility(visible = controlling, enter = fadeIn(), exit = fadeOut()) {
+                ControlPanel(controls, theme, tile, onClose = { controlling = false })
+            }
         }
 
         AnimatedVisibility(visible = pickingTheme, enter = fadeIn(), exit = fadeOut()) {

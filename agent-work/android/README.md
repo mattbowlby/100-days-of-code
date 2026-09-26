@@ -10,6 +10,8 @@ other app: no unlocking, no wiping.
   themes.
 - Swipe down on the apps to search. Enter opens the first match.
 - On an unfolded Z Fold, two pages side by side.
+- Swipe down from the top right for the control panel: Wi-Fi, Bluetooth,
+  flashlight and settings tiles, and brightness and volume sliders.
 
 What an Android home-screen app cannot change: the lock screen, the
 notification shade and quick settings stay Samsung's. Samsung's free Good Lock
@@ -39,6 +41,11 @@ To go back to Samsung's own home screen, choose **One UI Home** there.
 - **Long-press the wallpaper** (between apps) to pick a theme.
 - **Swipe down** on the apps to search; tap outside the search panel or press
   Back to close it.
+- **Swipe down from the top right** for the control panel. The first time,
+  the brightness slider says "Tap to allow brightness": tap it, switch on
+  "Allow modifying system settings" for Omarchy Home, and come back. Wi-Fi
+  and Bluetooth open Android's own switches for them (apps are not allowed to
+  flip those directly).
 - **Press Home** while on the home screen to go back to the first page.
 
 The dock starts with your phone, messages, browser and camera apps.

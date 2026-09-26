@@ -8,6 +8,10 @@
          without it the prompt closes at once. -->
     <uses-permission android:name="android.permission.REQUEST_DELETE_PACKAGES" />
 
+    <!-- The control panel's brightness slider. Granted by the user on a
+         settings page (the slider asks), never at install. -->
+    <uses-permission android:name="android.permission.WRITE_SETTINGS" />
+
     <queries>
         <intent>
             <action android:name="android.intent.action.MAIN" />
