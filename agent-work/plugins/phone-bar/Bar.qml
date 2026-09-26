@@ -447,12 +447,21 @@ Item {
   function lockPhone() {
     Util.execArgv(["omarchy-system-lock"])
     if (shell && typeof shell.summon === "function") shell.summon(keyboardId, "")
+    lockSeen = false
+    lockChecks = 0
     lockWatch.restart()
   }
 
   // The lock announces nothing when it lifts, so it is asked, and the keyboard
-  // put away once it has. Only while a lock this bar started is up: the first
-  // question comes two seconds in, by which time the lock has engaged.
+  // put away once it has -- but only once the lock has been seen up. The lock
+  // is started out of process and can take longer than one interval to engage
+  // on a slow phone; an early "false" is "not yet", and hiding the keyboard on
+  // it would leave the lock coming up with nothing to type on. A lock that
+  // never comes (no PAM file, a failure) is given up on after a few checks.
+  property bool lockSeen: false
+  property int lockChecks: 0
+  readonly property int lockCheckLimit: 5
+
   Timer {
     id: lockWatch
     interval: 2000
@@ -460,14 +469,22 @@ Item {
     onTriggered: if (!lockQuery.running) lockQuery.running = true
   }
 
+  function finishLockWatch() {
+    lockWatch.stop()
+    if (shell && typeof shell.hide === "function") shell.hide(keyboardId)
+  }
+
   Process {
     id: lockQuery
     command: ["omarchy-shell", "lock", "isLocked"]
     stdout: StdioCollector {
       onStreamFinished: {
-        if (text.trim() === "true") return
-        lockWatch.stop()
-        if (root.shell && typeof root.shell.hide === "function") root.shell.hide(root.keyboardId)
+        root.lockChecks++
+        if (text.trim() === "true") {
+          root.lockSeen = true
+          return
+        }
+        if (root.lockSeen || root.lockChecks >= root.lockCheckLimit) root.finishLockWatch()
       }
     }
   }
