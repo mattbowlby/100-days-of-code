@@ -58,7 +58,10 @@ the panel geometry in `install/devices/fajita.conf`, `DEVICE_GPU=freedreno`
    no Wi-Fi and no cellular.
 
 5. **Install Omarchy and then this port.** Once the phone boots to a shell:
-   Omarchy's own packages, then from a checkout of this repo on the device:
+   Omarchy's own packages, then from a checkout of this repo on the device.
+   **This step is not solved yet** -- see "The open problem" below: Omarchy
+   is packaged for Arch Linux, and postmarketOS is built on Alpine, so
+   Omarchy's installer does not run on it as it stands. Then:
 
    ```bash
    bin/omarchy-phone-diagnose        # confirms the profile resolves on-device
@@ -105,10 +108,31 @@ Omarchy's own small apps and fonts, and the `omarchy` package itself is
 `Architecture: any`. Those need rebuilding for aarch64, which is work, but it is
 ordinary packaging work rather than a porting problem.
 
-**So the honest verdict: nothing found so far blocks this.** It has still never
+**So the verdict, for Arch Linux ARM: nothing found so far blocks this.** It has still never
 been run, and "the packages exist" is a long way from "it boots and the panel
 lights up" — but the failure mode everyone feared, that the compositor or shell
 simply would not exist for ARM, is not the one you have.
+
+## The open problem: Omarchy on the phone's base system
+
+The package survey above is of **Arch Linux ARM**, while the phone boots
+**postmarketOS**, which is Alpine underneath: different package manager
+(`apk`, not `pacman`), different C library (musl, not glibc). So "the packages
+exist for aarch64" does not yet mean "Omarchy installs on the phone". Two ways
+forward, neither tried:
+
+- **Omarchy's pieces on postmarketOS.** Install Hyprland and Quickshell from
+  Alpine's own packages, and copy what the port uses of Omarchy -- its shell
+  (`shell/`), its `bin/` tools and default config -- from an Omarchy checkout.
+  Stays on the base the kernel port is maintained for; costs working out which
+  Omarchy tools assume Arch.
+- **Arch Linux ARM with postmarketOS's kernel.** Keep the fajita kernel and
+  firmware and put an Arch Linux ARM root filesystem on top, then install
+  Omarchy as on any Arch machine. Matches Omarchy's own assumptions; costs
+  maintaining the combination by hand.
+
+Until one of these is worked out and written up here, this guide ends at a
+phone that boots postmarketOS.
 
 ## Not an iPhone
 
