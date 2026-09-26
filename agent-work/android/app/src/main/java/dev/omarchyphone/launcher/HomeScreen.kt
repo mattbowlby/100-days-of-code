@@ -1,5 +1,6 @@
 package dev.omarchyphone.launcher
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -13,14 +14,17 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.exclude
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.safeDrawingPadding
+import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.PagerState
 import androidx.compose.foundation.pager.rememberPagerState
@@ -28,29 +32,27 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.MenuDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.min
-import kotlinx.coroutines.launch
 import kotlin.math.ceil
 import kotlin.math.floor
 import kotlin.math.max
 
-// What the home screen needs from outside it: the apps, the settings, and a way
-// to start an app. HomeActivity passes these in.
+// What the home screen needs from outside it: a way to start an app, show its
+// info and uninstall it. HomeActivity passes these in.
 class HomeActions(
     val launch: (AppEntry) -> Unit,
     val appInfo: (AppEntry) -> Unit,
@@ -62,6 +64,13 @@ private const val COLUMNS = 4
 // Shortest side at or above this is an unfolded foldable (or a tablet):
 // two pages side by side.
 private val WIDE_SHORTEST_SIDE = 600.dp
+// Space around the grid, the dots' row, and the gap between dock and edge.
+private val GRID_PAD_V = 12.dp
+private val DOTS = 24.dp
+private val DOCK_MARGIN = 12.dp
+// Between the dock's rim and its tiles, all round: the dock's corners are the
+// tiles' plus this, so the two curves stay concentric.
+private val DOCK_INSET = 12.dp
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -76,31 +85,49 @@ fun HomeScreen(
     var searching by remember { mutableStateOf(false) }
     var pickingTheme by remember { mutableStateOf(false) }
 
-    val dockKeys = settings.dockKeys ?: remember(apps) { settings.defaultDock() }
     val byKey = remember(apps) { apps.associateBy { it.key } }
-    val dock = dockKeys.mapNotNull { byKey[it] }.take(LauncherSettings.DOCK_SIZE)
+    // Only apps still installed count: a docked app that was uninstalled would
+    // otherwise hold its slot, invisible and impossible to remove.
+    val dockKeys = (settings.dockKeys ?: remember(apps) { settings.defaultDock() })
+        .filter { it in byKey }
+        .take(LauncherSettings.DOCK_SIZE)
+    val dock = dockKeys.mapNotNull { byKey[it] }
+    // Docked apps are not on the pages as well, as on iOS.
+    val paged = remember(apps, dockKeys) { apps.filterNot { it.key in dockKeys } }
 
     fun setSearching(open: Boolean) {
         searching = open
         onSearchOpenChanged(open)
     }
 
-    BoxWithConstraints(Modifier.fillMaxSize().safeDrawingPadding()) {
+    // Back closes whatever sheet is open, and only that. With none open it
+    // falls through to HomeActivity, which keeps Back from leaving home.
+    BackHandler(enabled = searching || pickingTheme) {
+        setSearching(false)
+        pickingTheme = false
+    }
+
+    // The keyboard is left out: it covers the pages rather than squeezing
+    // them, so the grid does not reflow each time search opens. The search
+    // sheet makes room for it itself.
+    BoxWithConstraints(
+        Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.safeDrawing.exclude(WindowInsets.ime)),
+    ) {
         val wide = min(maxWidth, maxHeight) >= WIDE_SHORTEST_SIDE
         val pageWidth = if (wide) maxWidth / 2 else maxWidth
         val pad = 20.dp
         val tile = min(64.dp, (pageWidth - pad * 2) / COLUMNS * 0.72f)
         val cellHeight = tile + 38.dp
-        val dockHeight = tile + 32.dp
-        val gridHeight = maxHeight - dockHeight - 24.dp /* dots */ - 24.dp /* margins */
+        val dockHeight = tile + DOCK_INSET * 2
+        val gridHeight = maxHeight - dockHeight - DOCK_MARGIN * 2 - DOTS - GRID_PAD_V * 2
         val rows = max(1, floor(gridHeight / cellHeight).toInt())
         val perPage = rows * COLUMNS
-        val pages = remember(apps, perPage) { apps.chunked(perPage).ifEmpty { listOf(emptyList()) } }
+        val pages = remember(paged, perPage) { paged.chunked(perPage).ifEmpty { listOf(emptyList()) } }
         val spread = if (wide && pages.size > 1) 2 else 1
         val pagerState = rememberPagerState { ceil(pages.size / spread.toFloat()).toInt() }
 
-        // Home pressed while home: back to the first page and out of search,
-        // as iOS does on a second press.
+        // Home pressed while home: back to the first page and out of any
+        // sheet, as iOS does on a second press.
         LaunchedEffect(homePresses) {
             if (homePresses > 0) {
                 setSearching(false)
@@ -116,7 +143,7 @@ fun HomeScreen(
                     .weight(1f)
                     .fillMaxWidth()
                     // Down on the pages opens search, as a swipe down on iOS's
-                    // home screen does. Up is left alone: sideways is the pager's.
+                    // home screen does. Sideways stays the pager's.
                     .pointerInput(Unit) {
                         var dragged = 0f
                         detectVerticalDragGestures(
@@ -133,11 +160,12 @@ fun HomeScreen(
                         onLongClick = { pickingTheme = true },
                     ),
             ) { index ->
-                Row(Modifier.fillMaxSize()) {
+                // A lone page on a wide screen sits in the middle, as on the
+                // Linux port, rather than in the left half.
+                Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.Center) {
                     for (s in 0 until spread) {
-                        val page = pages.getOrNull(index * spread + s) ?: emptyList()
                         AppGrid(
-                            apps = page,
+                            apps = pages.getOrNull(index * spread + s) ?: emptyList(),
                             rows = rows,
                             tile = tile,
                             cellHeight = cellHeight,
@@ -145,7 +173,8 @@ fun HomeScreen(
                             dockKeys = dockKeys,
                             settings = settings,
                             actions = actions,
-                            modifier = Modifier.width(pageWidth).padding(horizontal = pad, vertical = 12.dp),
+                            homePresses = homePresses,
+                            modifier = Modifier.width(pageWidth).padding(horizontal = pad, vertical = GRID_PAD_V),
                         )
                     }
                 }
@@ -153,18 +182,9 @@ fun HomeScreen(
 
             PageDots(pagerState, theme)
 
-            Dock(
-                apps = dock,
-                tile = tile,
-                theme = theme,
-                settings = settings,
-                dockKeys = dockKeys,
-                actions = actions,
-                modifier = Modifier
-                    .padding(horizontal = pad, vertical = 12.dp)
-                    .fillMaxWidth()
-                    .height(dockHeight),
-            )
+            Box(Modifier.fillMaxWidth().padding(DOCK_MARGIN), contentAlignment = Alignment.Center) {
+                Dock(dock, tile, theme, dockKeys, settings, actions, homePresses, dockHeight)
+            }
         }
 
         AnimatedVisibility(visible = searching, enter = fadeIn(), exit = fadeOut()) {
@@ -198,6 +218,7 @@ private fun AppGrid(
     dockKeys: List<String>,
     settings: LauncherSettings,
     actions: HomeActions,
+    homePresses: Int,
     modifier: Modifier,
 ) {
     Column(modifier, verticalArrangement = Arrangement.Top) {
@@ -207,7 +228,7 @@ private fun AppGrid(
                     val app = apps.getOrNull(r * COLUMNS + c)
                     Box(Modifier.weight(1f), contentAlignment = Alignment.TopCenter) {
                         if (app != null) {
-                            LaunchableTile(app, tile, theme, dockKeys, settings, actions, showLabel = true)
+                            LaunchableTile(app, tile, theme, dockKeys, settings, actions, homePresses, showLabel = true)
                         }
                     }
                 }
@@ -217,8 +238,8 @@ private fun AppGrid(
 }
 
 // A tile that opens its app on a tap and offers a menu on a long press: put
-// it in or take it out of the dock, see its info, uninstall it.
-@OptIn(ExperimentalFoundationApi::class)
+// it in or take it out of the dock, see its info, uninstall it. The menu is in
+// the theme's colours, and closes on a Home press.
 @Composable
 private fun LaunchableTile(
     app: AppEntry,
@@ -227,59 +248,71 @@ private fun LaunchableTile(
     dockKeys: List<String>,
     settings: LauncherSettings,
     actions: HomeActions,
+    homePresses: Int,
     showLabel: Boolean,
 ) {
     var menu by remember { mutableStateOf(false) }
+    LaunchedEffect(homePresses) { menu = false }
     val inDock = app.key in dockKeys
+    val itemColors = MenuDefaults.itemColors(textColor = theme.foreground)
     Box {
         AppTile(
             app = app,
             size = tile,
             theme = theme,
             showLabel = showLabel,
-            modifier = Modifier.combinedClickable(
-                onClick = { actions.launch(app) },
-                onLongClick = { menu = true },
-            ),
+            onClick = { actions.launch(app) },
+            onLongClick = { menu = true },
         )
-        DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
+        DropdownMenu(
+            expanded = menu,
+            onDismissRequest = { menu = false },
+            shape = RoundedCornerShape(tile * 0.27f),
+            containerColor = theme.background,
+        ) {
             if (inDock) {
-                DropdownMenuItem(text = { Text("Remove from Dock") }, onClick = {
+                DropdownMenuItem(text = { Text("Remove from Dock") }, colors = itemColors, onClick = {
                     menu = false
                     settings.setDock(dockKeys - app.key)
                 })
             } else if (dockKeys.size < LauncherSettings.DOCK_SIZE) {
-                DropdownMenuItem(text = { Text("Add to Dock") }, onClick = {
+                DropdownMenuItem(text = { Text("Add to Dock") }, colors = itemColors, onClick = {
                     menu = false
                     settings.setDock(dockKeys + app.key)
                 })
             }
-            DropdownMenuItem(text = { Text("App Info") }, onClick = { menu = false; actions.appInfo(app) })
-            DropdownMenuItem(text = { Text("Uninstall") }, onClick = { menu = false; actions.uninstall(app) })
+            DropdownMenuItem(text = { Text("App Info") }, colors = itemColors, onClick = { menu = false; actions.appInfo(app) })
+            DropdownMenuItem(text = { Text("Uninstall") }, colors = itemColors, onClick = { menu = false; actions.uninstall(app) })
         }
     }
 }
 
-// The dock: a frosted panel along the bottom with up to four apps, no labels,
-// as on iOS.
+// The dock: a frosted panel with room for four apps, no labels, as on iOS and
+// the Linux port -- sized to its four slots rather than the screen, lighter
+// than the sheets, its corners concentric with the tiles'.
 @Composable
 private fun Dock(
     apps: List<AppEntry>,
     tile: Dp,
     theme: OmarchyTheme,
-    settings: LauncherSettings,
     dockKeys: List<String>,
+    settings: LauncherSettings,
     actions: HomeActions,
-    modifier: Modifier,
+    homePresses: Int,
+    height: Dp,
 ) {
-    val shape = RoundedCornerShape(tile * 0.27f + 12.dp)
+    val shape = RoundedCornerShape(tile * 0.27f + DOCK_INSET)
+    val slot = tile + DOCK_INSET * 2
     Row(
-        modifier = modifier.frosted(theme, shape),
+        modifier = Modifier
+            .width(slot * LauncherSettings.DOCK_SIZE)
+            .height(height)
+            .frosted(theme, shape, alpha = 0.28f, rim = 0.14f),
         horizontalArrangement = Arrangement.SpaceEvenly,
         verticalAlignment = Alignment.CenterVertically,
     ) {
         for (app in apps) {
-            LaunchableTile(app, tile, theme, dockKeys, settings, actions, showLabel = false)
+            LaunchableTile(app, tile, theme, dockKeys, settings, actions, homePresses, showLabel = false)
         }
     }
 }
@@ -289,7 +322,7 @@ private fun Dock(
 @Composable
 private fun PageDots(state: PagerState, theme: OmarchyTheme) {
     Row(
-        modifier = Modifier.fillMaxWidth().height(24.dp),
+        modifier = Modifier.fillMaxWidth().height(DOTS),
         horizontalArrangement = Arrangement.Center,
         verticalAlignment = Alignment.CenterVertically,
     ) {

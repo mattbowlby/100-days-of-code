@@ -13,7 +13,8 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.setValue
 
 // The home screen. Android starts it for the Home button once it is chosen as
-// the phone's home app (Settings > Apps > Default apps > Home app).
+// the phone's home app (on a Samsung: Settings > Apps > Choose default apps >
+// Home app).
 class HomeActivity : ComponentActivity() {
     private lateinit var repository: AppRepository
     private lateinit var settings: LauncherSettings
@@ -23,13 +24,14 @@ class HomeActivity : ComponentActivity() {
     private var homePresses by mutableIntStateOf(0)
     private var searchOpen = false
 
-    // Back closes search; with nothing open, a home screen has nowhere to go
-    // back to, so Back is taken and does nothing.
+    // A home screen has nowhere to go back to, so Back is taken and does
+    // nothing. Open sheets close on Back through HomeScreen's own handler,
+    // which comes first.
     private val back = object : OnBackPressedCallback(true) {
-        override fun handleOnBackPressed() {
-            if (searchOpen) homePresses++
-        }
+        override fun handleOnBackPressed() {}
     }
+
+    private val blurListener = java.util.function.Consumer<Boolean> { applyBlur() }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -37,6 +39,7 @@ class HomeActivity : ComponentActivity() {
         repository = AppRepository(this)
         settings = LauncherSettings(this)
         onBackPressedDispatcher.addCallback(this, back)
+        repository.start()
 
         setContent {
             HomeScreen(
@@ -55,12 +58,17 @@ class HomeActivity : ComponentActivity() {
 
     override fun onStart() {
         super.onStart()
-        repository.start()
+        windowManager.addCrossWindowBlurEnabledListener(mainExecutor, blurListener)
     }
 
     override fun onStop() {
-        repository.stop()
+        windowManager.removeCrossWindowBlurEnabledListener(blurListener)
         super.onStop()
+    }
+
+    override fun onDestroy() {
+        repository.close()
+        super.onDestroy()
     }
 
     // Home pressed with the home screen already in front.
@@ -73,18 +81,18 @@ class HomeActivity : ComponentActivity() {
     // where the phone supports blurring behind a window (Samsung's flagships
     // do; the setting can also be off to save battery). Without it the sheet's
     // own tint still separates it.
+    // Asked again whenever the phone turns blur on or off (battery saver
+    // does), so a blur switched off mid-search never comes back stuck on.
     private fun setSearchOpen(open: Boolean) {
         searchOpen = open
-        if (!windowManager.isCrossWindowBlurEnabled) return
-        window.attributes = window.attributes.also {
-            if (open) {
-                window.addFlags(WindowManager.LayoutParams.FLAG_BLUR_BEHIND)
-                it.blurBehindRadius = BLUR_RADIUS
-            } else {
-                window.clearFlags(WindowManager.LayoutParams.FLAG_BLUR_BEHIND)
-                it.blurBehindRadius = 0
-            }
-        }
+        applyBlur()
+    }
+
+    private fun applyBlur() {
+        val blur = searchOpen && windowManager.isCrossWindowBlurEnabled
+        if (blur) window.addFlags(WindowManager.LayoutParams.FLAG_BLUR_BEHIND)
+        else window.clearFlags(WindowManager.LayoutParams.FLAG_BLUR_BEHIND)
+        window.attributes = window.attributes.also { it.blurBehindRadius = if (blur) BLUR_RADIUS else 0 }
     }
 
     private fun uninstall(app: AppEntry) {

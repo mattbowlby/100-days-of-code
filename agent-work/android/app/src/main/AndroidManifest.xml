@@ -4,6 +4,10 @@
     <!-- Every installed app with a launcher icon, which a home screen must
          list. Declared as a query rather than QUERY_ALL_PACKAGES: only
          launchable apps are needed. -->
+    <!-- Lets "Uninstall" in an app's menu open Android's uninstall prompt;
+         without it the prompt closes at once. -->
+    <uses-permission android:name="android.permission.REQUEST_DELETE_PACKAGES" />
+
     <queries>
         <intent>
             <action android:name="android.intent.action.MAIN" />
