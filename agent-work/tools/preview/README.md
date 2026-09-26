@@ -13,10 +13,13 @@ It is a simulation, not a screenshot:
   implicit size.** Surfaces are then stacked by layer over the theme's
   wallpaper.
 - **Window stills and effects are stand-ins.** `ScreencopyView` is a grey
-  panel labelled "window" (hidden in the switcher by the effect below), and `MultiEffect` (not in Qt before 6.5) is
-  replaced by a plain `ShaderEffect`. The harness renders with Qt's software
+  panel labelled "window" (hidden in the switcher by the effect below),
+  and `MultiEffect` (not in Qt before 6.5) is replaced by a plain `ShaderEffect`. The harness renders with Qt's software
   backend, which draws no shader effects, so anything behind one -- the app
   switcher's window stills -- comes out blank.
+- **Desktop entries and windows are stand-ins too.** `DesktopEntries` has no
+  entries, so app names fall back to window titles, and `ToplevelManager` has
+  no windows and never an active one.
 - **Blur is imitated.** Any namespace listed in `--blur` gets a Gaussian blur
   of whatever is under it, wherever the surface's alpha is above 0.05. The
   real blur is Hyprland's, set in `config/hypr/looknfeel.lua`.

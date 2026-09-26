@@ -4,6 +4,7 @@ pragma ComponentBehavior: Bound
 
 import QtQuick
 import Quickshell
+import Quickshell.Hyprland
 import Quickshell.Io
 import Quickshell.Wayland
 import qs.Commons
@@ -195,23 +196,25 @@ Item {
   // library starts a fresh process per launch with nothing to stop a repeat --
   // a double-tapped browser is two windows, and two workspaces. The menu gets
   // away without this by closing on launch; the home screen stays under the
-  // finger, so it holds further launches off for a moment instead.
-  property bool launching: false
+  // finger, so it holds a repeat of the same app off for a moment instead.
+  // Only the same app: a different one tapped straight after -- a search
+  // result, say -- is a real launch, not a bounce.
+  property string launchingId: ""
 
   Timer {
     id: launchCooldown
     interval: 1500
-    onTriggered: root.launching = false
+    onTriggered: root.launchingId = ""
   }
 
   function launch(app) {
     if (!appLibrary || !app) return
-    // A tap during the cooldown still ends the search it came from.
-    if (launching) {
+    // A repeat during the cooldown still ends the search it came from.
+    if (launchingId !== "" && launchingId === app.appId) {
       closeSearch()
       return
     }
-    launching = true
+    launchingId = app.appId
     launchCooldown.restart()
     appLibrary.launch(app.appId, app.label)
     closeSearch()
@@ -383,11 +386,13 @@ Item {
   // way.
   property bool searching: false
   property string query: ""
-  // As many results as fit above the on-screen keyboard, up to eight. The
+  // As many results as fit above the on-screen keyboard, up to eight, and none
+  // when not even one does (a landscape phone at a large font), rather than a
+  // row laid out, and tappable, under the keyboard. The
   // keyboard's height is phone-keyboard's own sum (four 44px rows and five
   // gaps); it is another plugin, so it is restated here and must follow it.
   readonly property int keyboardHeight: Style.space(44) * 4 + Style.spacing.xs * 5
-  readonly property int searchResultLimit: Math.max(1, Math.min(8, Math.floor(
+  readonly property int searchResultLimit: Math.max(0, Math.min(8, Math.floor(
     (surfaceHeight - keyboardHeight - (barAtBottom ? barSpace : 0)
       - searchSheet.anchors.topMargin - Style.spacing.lg * 3 - searchSheet.rowHeight)
     / (searchSheet.rowHeight + Style.spacing.sm))))
@@ -395,12 +400,13 @@ Item {
 
   // The library's own fuzzy search and ranking (AppSearch.js), the same call the
   // grid makes with an empty query; empty, it lists apps alphabetically, as the
-  // grid does.
+  // grid does. Always at least the best match, shown or not, so enter still
+  // opens it when no row fits on screen.
   readonly property var results: {
     if (!searching || !appLibrary) return []
     var rows = appLibrary.sortedEntries(query)
     var out = []
-    for (var i = 0; i < rows.length && out.length < searchResultLimit; i++) {
+    for (var i = 0; i < rows.length && out.length < Math.max(1, searchResultLimit); i++) {
       var entry = rows[i].entry
       if (!entry || !entry.id) continue
       out.push({ appId: String(entry.id), label: appLibrary.entryName(entry), iconName: String(entry.icon || "") })
@@ -413,6 +419,14 @@ Item {
   // keys belong to what is now in front. Watched by the window count, not the
   // active window: while this surface holds exclusive keyboard focus Hyprland
   // will not focus a new window, so the active window would never change.
+  // Going to another workspace ends it too: the app switcher can bring an app
+  // forward without a window opening, and that app could not take the keys
+  // while the search held them.
+  Connections {
+    target: Hyprland
+    function onFocusedWorkspaceChanged() { root.closeSearch() }
+  }
+
   readonly property int windowCount: ToplevelManager.toplevels.values.length
   property int lastWindowCount: 0
   onWindowCountChanged: {
@@ -711,7 +725,7 @@ Item {
         }
 
         Repeater {
-          model: root.results
+          model: root.results.slice(0, root.searchResultLimit)
 
           delegate: Item {
             id: result

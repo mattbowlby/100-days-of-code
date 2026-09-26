@@ -16,7 +16,8 @@ current Samsung.
 ## The look
 
 iOS's layout -- pages of apps, a dock, page dots, a control centre that drops
-from the top, a search that drops from the home screen -- with every app on the same frosted rounded-square tile, and
+from the top, a search that drops from the home screen -- with every app on
+the same frosted rounded-square tile, and
 Omarchy's see-through surfaces over a blur instead of Apple's liquid glass.
 It follows the active Omarchy theme, light or dark. On an unfolded foldable
 (shortest side 600 logical px or more) the home screen opens as two pages side

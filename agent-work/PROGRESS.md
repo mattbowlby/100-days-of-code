@@ -12,9 +12,11 @@ hour while work is going on. Newest entry first.
   item's built-in layer-effects object, never `"symbols"`); it now reads
   `keyLayer`.
 - **Search**: swipe down on the home screen for a search field at the top,
-  with the on-screen keyboard up. Up to 8 apps match as you type, each on the
-  same tile as the grid. Tap a result, or press enter for the first one; tap
-  outside the field to close it.
+  with the on-screen keyboard up. Apps match as you type, each on the same
+  tile as the grid: as many as fit above the keyboard, up to eight (fewer on
+  a small or landscape screen). Tap a result, or press enter for the first
+  one; tap outside the search panel to close it. Tap the field to bring the
+  keyboard back.
 - **Home indicator**: the iOS pill at the bottom edge, shown over apps only
   (not on the home screen), marking where the swipe home starts.
 - **App switcher**: swipe up from the bottom edge and hold still for a moment;

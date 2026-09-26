@@ -173,8 +173,8 @@ Both are newer than the first version of this port, and both broke it silently:
   `bar`. A gesture service or a quick-settings overlay that opens other
   plugins' surfaces gets `false` back and nothing happens. So the edge
   gestures and the control centre are part of the bar.
-  The shell's IPC is not scoped this way: `IpcHandler { target: "shell" }`
-  `summon`/`hide`/`toggle` call `shell.summon` directly, so any process of the
+  The shell's IPC is not scoped this way: `IpcHandler { target: "shell" }`'s
+  `summon`/`hide`/`toggle` go straight to `shell.summon`/`hide`/`toggle`, so any process of the
   user's -- a plugin included, via `Quickshell.execDetached(["omarchy-shell",
   "shell", "summon", id])` -- can open another plugin. The home screen brings
   up the keyboard for search this way, as the keyboard's bar widget already
