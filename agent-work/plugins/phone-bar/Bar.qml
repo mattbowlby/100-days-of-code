@@ -355,7 +355,15 @@ Item {
       onPositionChanged: function(mouse) {
         if (pressY < 0) return
         var travelled = edgeWindow.edge === "bottom" ? pressY - mouse.y : mouse.y - pressY
-        if (travelled < root.triggerDistance) return
+        if (travelled < root.triggerDistance) {
+          // Dragged back down: that is a cancel, as on iOS, not a swipe
+          // waiting to happen. Coming back up arms it afresh.
+          if (armed) {
+            armed = false
+            holdTimer.stop()
+          }
+          return
+        }
 
         if (edgeWindow.edge === "bottom") {
           // Still moving restarts the wait; only a pause counts as a hold.
@@ -376,16 +384,18 @@ Item {
 
       // Home goes on the lift, as iOS's does: until then the swipe might yet
       // become a hold.
-      onReleased: {
-        var wasArmed = armed && holdTimer.running
+      // The lift point is checked too: a finger can come back down between
+      // the last move sampled and the lift.
+      onReleased: function(mouse) {
+        var home = armed && holdTimer.running && pressY - mouse.y >= root.triggerDistance
         reset()
-        if (wasArmed) edgeWindow.triggered()
+        if (home) edgeWindow.triggered()
       }
       onCanceled: reset()
 
       Timer {
         id: holdTimer
-        interval: 250
+        interval: 200
         onTriggered: {
           swipe.reset()
           edgeWindow.held()
