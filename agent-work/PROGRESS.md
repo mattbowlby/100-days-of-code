@@ -13,13 +13,13 @@ hour while work is going on. Newest entry first.
   `keyLayer`.
 - **Home indicator**: the iOS pill at the bottom edge, shown over apps only
   (not on the home screen), marking where the swipe home starts.
-- **App switcher**: swipe up from the bottom edge and hold still for a
-  moment; over an app, the home indicator stretches as the cue. Every open app (not
+- **App switcher**: swipe up from the bottom edge and hold still for a moment;
+  over an app, the home indicator stretches as the cue. Every open app (not
   scratchpads) is a card in a row, a still of its window under its name,
-  opening on the app you were in. Tap a card to go to that app, drag it up about
-  a third of its height to close it, tap outside the cards to go back. A quick swipe up still goes
-  home, now on the lift, and dragging back down cancels. The window stills
-  are untested: the preview cannot capture windows.
+  opening on the app you were in. Tap a card to go to that app, drag it up
+  about a third of its height to close it, tap outside the cards to go back. A
+  quick swipe up still goes home, now on the lift, and dragging back down
+  cancels. The window stills are untested: the preview cannot capture windows.
 - **Keystrokes are typed in order, and never appear in a process list.** One
   queue, one wtype at a time, text passed on stdin.
 - **Opt-in Lock tile.**
@@ -81,7 +81,8 @@ stranded lock back on start.
   - Everything behind it frosts over, like iOS.
 - **Swipe up from the bottom** goes home. Doing it again while already home
   goes back to the first page. The app keeps running on its own workspace;
-  swipe sideways to get back to it (there is no app switcher yet).
+  swipe sideways to get back to it, or use the app switcher (see the newer
+  entry).
 - **See-through bar** over a Hyprland blur: Omarchy's look rather than Apple's
   liquid glass.
 - **Fixes to the original port.**
@@ -126,7 +127,8 @@ phone. See the next entry for the opt-in lock.
 
 - **Nothing has run on a real phone.** The renders come from an offscreen
   harness with Quickshell stubbed out, not from the real shell.
-- **Missing iOS pieces:** app switcher, lock screen, notifications, and search.
+- **Missing iOS pieces:** a lock screen with its own keypad, notifications,
+  and search.
 
 ## Can it be flashed onto the phones asked for?
 
