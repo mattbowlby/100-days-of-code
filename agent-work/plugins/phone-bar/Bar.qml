@@ -227,12 +227,24 @@ Item {
   readonly property int triggerDistance: Style.space(40)
 
   // Home is the empty workspace the home screen shows through (see
-  // phone-home/Home.qml), so going home is going to one. Summoning the home
-  // plugin as well sends its pager back to the first page, as a second press
-  // of an iPhone's home button does. `hyprctl dispatch` no longer takes the old
-  // "workspace empty" form -- its arguments are Lua now -- hence eval (NOTES.md).
+  // phone-home/Home.qml), so going home is going to one. `hyprctl dispatch` no
+  // longer takes the old "workspace empty" form -- its arguments are Lua now --
+  // hence eval (NOTES.md).
+  //
+  // Only from a workspace that has windows. "empty" resolves to the lowest
+  // empty workspace anywhere, not the current one, so swiping up while already
+  // home on workspace 5 would otherwise slide over to an emptier-numbered 3.
+  //
+  // Summoning the home plugin as well sends its pager to the first page. That
+  // happens on every swipe, from an app too, which is one step short of iOS
+  // (it returns to the page you left); the shell cannot tell from here which
+  // case it is in, because the Lua above runs out of process.
+  readonly property string goHomeLua:
+    "local w = hl.get_active_workspace(); "
+    + "if w and w.windows > 0 then hl.dispatch(hl.dsp.focus({ workspace = \"empty\" })) end"
+
   function goHome() {
-    Quickshell.execDetached(["hyprctl", "eval", "hl.dispatch(hl.dsp.focus({ workspace = \"empty\" }))"])
+    Quickshell.execDetached(["hyprctl", "eval", goHomeLua])
     if (shell && typeof shell.summon === "function") shell.summon(homeId, "")
   }
 
@@ -264,10 +276,16 @@ Item {
     implicitHeight: root.edgeSize
     color: "transparent"
 
+    // Out of the way while the control centre is up: it is on the same layer,
+    // and a strip over its card would eat taps meant for the tiles.
+    visible: !root.controlOpen
+
     WlrLayershell.namespace: "omarchy-phone-edge-" + edgeWindow.edge
-    // Top, not Overlay: the control centre and a lock surface must be able to
-    // sit above a strip rather than have their input eaten by it.
-    WlrLayershell.layer: WlrLayer.Top
+    // Overlay, not Top. Hyprland discards touches on Top-layer surfaces while a
+    // window is exclusively fullscreen and hands them to the window instead, so
+    // on Top a fullscreen video could never be swiped out of. A session lock
+    // draws above every layer regardless.
+    WlrLayershell.layer: WlrLayer.Overlay
     WlrLayershell.keyboardFocus: WlrKeyboardFocus.None
     exclusionMode: ExclusionMode.Ignore
 
