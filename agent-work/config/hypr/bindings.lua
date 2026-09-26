@@ -15,10 +15,10 @@
 -- logind, which install/hardware/power-key.sh configures.
 --
 -- Screen off, and NOT locked -- for now. Omarchy's lock screen asks for a
--- typed password, and the phone's on-screen keyboard is a layer surface that a
--- session lock covers like every other, so a locked phone with no hardware
--- keyboard cannot be unlocked at all. Until a phone lock with its own PIN pad
--- exists (NOTES.md), locking would brick the session.
+-- typed password; the on-screen keyboard is drawn over it by an above_lock
+-- layer rule (looknfeel.lua), but that is not yet proven on a phone, and a lock
+-- it cannot type into could be left only by forcing the phone off (NOTES.md).
+-- The opt-in Lock tile is the one way to lock until it is.
 --
 -- Off only from on, and only once the button is let go. Hyprland runs a key's
 -- binds first and then, for the same event -- press and release alike -- wakes

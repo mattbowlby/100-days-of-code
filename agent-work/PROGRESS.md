@@ -14,8 +14,10 @@ hour while work is going on. Newest entry first.
 - **Keystrokes are typed in order, and never appear in a process list.** One
   queue, one wtype at a time, text passed on stdin.
 - **Opt-in Lock tile.**
-  - To enable it: `touch ~/.config/omarchy-phone/lock-with-keyboard`. A Lock
-    tile then appears in the control centre.
+  - To enable it:
+    `mkdir -p ~/.config/omarchy-phone && echo 1 > ~/.config/omarchy-phone/lock-with-keyboard`.
+    A Lock tile then appears in the control centre. Write something into the
+    file; an empty one may not be picked up.
   - It locks with Omarchy's password lock and brings the on-screen keyboard
     up over it. The keyboard goes away by itself a few seconds after
     unlocking.
@@ -26,7 +28,7 @@ run on a phone yet.
 
 1. Attach a hardware keyboard first (USB-C, or Bluetooth already paired), so
    the password can be typed if the test fails.
-2. Run `hyprctl configerrors`. It must print nothing, because an older
+2. Run `hyprctl configerrors`. It must print no error text, because an older
    Hyprland without `above_lock` would reject the rule.
    `omarchy-shell lock status` must show `"passwordPam":true`.
 3. Enable the tile (above), swipe down, and tap Lock.
