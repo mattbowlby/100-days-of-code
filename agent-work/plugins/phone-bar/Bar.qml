@@ -333,9 +333,17 @@ Item {
       onCanceled: pressY = -1
     }
 
+    // This strip's own screen's workspace: with an external display attached,
+    // the globally focused workspace may be on the other one.
+    readonly property var screenWorkspace: {
+      var monitor = Hyprland.monitorFor(edgeWindow.screen)
+      return monitor ? monitor.activeWorkspace : null
+    }
+
     // The home indicator: the pill iOS draws where the swipe home begins. Only
-    // over an app -- the home screen itself needs no directions home -- and
-    // only on the bottom strip. iOS's size, 134 by 5 on a 375 screen, and like
+    // over an app -- the home screen itself needs no directions home -- not
+    // over a fullscreen one, where iOS hides it too, and only on the bottom
+    // strip. The strip stays either way: it is how a fullscreen app is left. iOS's size, 134 by 5 on a 375 screen, and like
     // iOS's it does not keep growing on a wide one.
     Rectangle {
       anchors.horizontalCenter: parent.horizontalCenter
@@ -344,8 +352,17 @@ Item {
       width: Math.min(Math.round(parent.width * 0.36), Style.space(134))
       height: Math.max(3, Style.space(5))
       radius: height / 2
-      color: Util.alpha(Color.foreground, 0.7)
-      visible: edgeWindow.edge === "bottom" && root.appInFront
+      // Two tones, because it cannot see what it sits on: iOS tints its pill
+      // against the app beneath, and a layer surface cannot sample that. The
+      // theme's foreground carries on apps of the theme's own lightness, and
+      // the outline in its background carries on the opposite kind -- a white
+      // page under a dark theme, a black one under a light theme.
+      color: Util.alpha(Color.foreground, 0.85)
+      border.width: 1
+      border.color: Util.alpha(Color.background, 0.6)
+      visible: edgeWindow.edge === "bottom" && !!edgeWindow.screenWorkspace
+        && edgeWindow.screenWorkspace.toplevels.values.length > 0
+        && !edgeWindow.screenWorkspace.hasFullscreen
     }
   }
 
