@@ -36,6 +36,7 @@ say() { echo "omarchy-phone-lock-build: $*" >&2; }
 clean() {
   local name
   rm -f -- "$TARGET/manifest.json" "$TARGET/manifest.json.tmp"
+  rm -rf -- "$TARGET"/.stage.* "$TARGET"/.old.*
   if [[ -f $LIST ]]; then
     while IFS= read -r name; do
       [[ -n $name && $name != . && $name != .. && $name != */* \
@@ -167,17 +168,33 @@ old=""
 committed=0
 moved_in=()
 finish() {
+  # All of it, whatever fails: a rollback stopped part-way is worse than one
+  # that reports a step it could not do.
+  set +e
   local name
   if [[ -n $old && -d $old ]]; then
     if ((committed)); then
       rm -rf -- "$old"
     else
-      for name in "${moved_in[@]}"; do rm -rf -- "${TARGET:?}/$name"; done
-      for name in "$old"/* "$old"/.[!.]*; do
-        [[ -e $name ]] && mv -fT -- "$name" "$TARGET/${name##*/}"
+      # A file with a copy in .old is overwritten by the move back, in one
+      # rename; only what has nothing to go back over it is removed first.
+      for name in "${moved_in[@]}"; do
+        if [[ -d $TARGET/$name || ! -e $old/$name ]]; then rm -rf -- "${TARGET:?}/$name"; fi
       done
-      rmdir -- "$old"
-      say "the build did not finish; the previous one is back in place"
+      for name in "$old"/* "$old"/.[!.]*; do
+        [[ -e $name || -L $name ]] || continue
+        # Still the same file: the new one never arrived, only the link goes.
+        if [[ $name -ef $TARGET/${name##*/} ]]; then
+          rm -f -- "$name"
+        else
+          mv -fT -- "$name" "$TARGET/${name##*/}"
+        fi
+      done
+      if rmdir -- "$old"; then
+        say "the build did not finish; the previous one is back in place"
+      else
+        say "the build did not finish, and putting the previous one back left $old: move its entries back by hand"
+      fi
     fi
   fi
   [[ -n $stage ]] && rm -rf -- "$stage"
@@ -267,13 +284,20 @@ fi
 # not, then the list, then the manifest that makes the host take it. Whatever
 # is replaced or removed goes to .old first (see finish above).
 old=$(mktemp -d "$TARGET/.old.XXXXXX")
+# A file replaced by a file keeps a hard link in .old and is then renamed over
+# in one step, so the plugin is never without it -- manifest.json above all,
+# whose absence makes the host drop the lock service. A directory, a change of
+# type, or an entry going away is moved out whole. $2 is what replaces it.
 set_aside() {
-  if [[ -e $TARGET/$1 || -L $TARGET/$1 ]]; then
+  [[ -e $TARGET/$1 || -L $TARGET/$1 ]] || return 0
+  if [[ -n ${2:-} && ! -d $TARGET/$1 && ! -d $2 ]]; then
+    ln -f -- "$TARGET/$1" "$old/$1" 2>/dev/null || cp -a -- "$TARGET/$1" "$old/$1"
+  else
     mv -fT -- "$TARGET/$1" "$old/$1"
   fi
 }
 for name in "${names[@]}"; do
-  set_aside "$name"
+  set_aside "$name" "$stage/$name"
   moved_in+=("$name")
   mv -fT -- "$stage/$name" "$TARGET/$name"
 done
@@ -284,10 +308,11 @@ if [[ -f $LIST ]]; then
     [[ " ${names[*]} " == *" $name "* ]] || set_aside "$name"
   done <"$LIST"
 fi
-set_aside .generated
+set_aside .generated "$stage/.generated"
 moved_in+=(.generated)
-printf '%s\n' "${names[@]}" >"$LIST"
-set_aside manifest.json
+printf '%s\n' "${names[@]}" >"$stage/.generated"
+mv -fT -- "$stage/.generated" "$LIST"
+set_aside manifest.json "$stage/manifest.json"
 moved_in+=(manifest.json)
 mv -fT -- "$stage/manifest.json" "$TARGET/manifest.json"
 committed=1
