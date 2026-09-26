@@ -67,8 +67,10 @@ have been unreachable by touch. Workspaces *are* reachable with one finger via
 `workspace_swipe_touch`, so workspaces are where windows go.
 
 Consequences to hold onto while building the shell: the app switcher is the
-horizontal swipe, the app grid opens apps onto empty workspaces, and "two
-windows side by side" is not a state this port has.
+horizontal swipe, the home screen is whatever an empty workspace shows (it sits
+on the Bottom layer under every window) so launching from it opens apps onto
+an empty workspace, and "two windows side by side" is not a state this port
+has.
 
 ## Also verified
 
@@ -120,9 +122,26 @@ inside the plugin directory — PluginRegistry rejects the manifest otherwise.
 The kinds in use upstream: `bar`, `bar-widget`, `service`, `overlay`, `panel`,
 `menu`.
 
-Planned plugins, in build order: `omarchy.phone.bar` (kind `bar`), then the app
-grid and on-screen keyboard as `overlay`s built out from `Ui/KeyboardPanel.qml`,
-then a phone `lock`.
+The plugins as built: `dev.omarchyphone.bar` (kind `bar`, and host of the edge
+gestures and control centre), `dev.omarchyphone.home` (kinds `overlay` +
+`menu`, `keepLoaded`), `dev.omarchyphone.keyboard` (`overlay` + `bar-widget`).
+A phone `lock` is still to come.
+
+### Two host rules the layout of the plugins follows
+
+Both are newer than the first version of this port, and both broke it silently:
+
+- **A plugin may summon, hide or toggle only itself -- unless it is the bar.**
+  The scoped shell each third-party plugin gets checks `pluginOwnsTarget`, and
+  the only exception is `barPluginMayControl` (shell.qml), for plugins of kind
+  `bar`. A gesture service or a quick-settings overlay that opens other
+  plugins' surfaces gets `false` back and nothing happens. So the edge
+  gestures and the control centre are part of the bar.
+- **Only plugins of kind `menu` get an app library.** `createScopedPluginShell`
+  sets `appLibrary` to null for everything else, so an overlay launcher lists
+  nothing. The home screen declares `["overlay", "menu"]`: the host loads it as
+  an overlay (overlay wins over menu in `computePanelEntries`) and hands it the
+  library.
 
 ## Verifying QML
 

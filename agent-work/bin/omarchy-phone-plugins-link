@@ -35,6 +35,22 @@ link_all() {
       echo "linked $name"
     fi
   done
+
+  prune_stale
+}
+
+# A plugin removed from the checkout leaves its link behind, dangling, and the
+# host keeps trying to load whatever that name used to be. Only links into this
+# checkout are considered, as in unlink_all.
+prune_stale() {
+  local target name
+  for target in "$PLUGINS_DIR"/*; do
+    [[ -L $target && ! -e $target ]] || continue
+    name=$(basename "$target")
+    [[ $(readlink "$target") == "$SOURCE_DIR"/* ]] || continue
+    rm -- "$target"
+    echo "removed stale link $name"
+  done
 }
 
 # Only ever removes symlinks that point back into this checkout, so a real
@@ -62,8 +78,12 @@ status() {
   for target in "$PLUGINS_DIR"/*; do
     [[ -e $target || -L $target ]] || continue
     name=$(basename "$target")
-    if [[ -L $target ]]; then
-      resolved=$(readlink -f "$target" || echo "BROKEN")
+    if [[ -L $target && ! -e $target ]]; then
+      # readlink -f resolves a dangling link without complaint, so test the
+      # target itself.
+      printf '%-18s -> %s (BROKEN)\n' "$name" "$(readlink "$target")"
+    elif [[ -L $target ]]; then
+      resolved=$(readlink -f "$target")
       if [[ $resolved == "$SOURCE_DIR"/* ]]; then
         printf '%-18s -> %s (this checkout)\n' "$name" "$resolved"
       else

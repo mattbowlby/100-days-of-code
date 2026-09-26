@@ -93,24 +93,65 @@ mapfile -t overlay_ids < <(
   done
 )
 
+ids_json=$(printf '%s\n' "${overlay_ids[@]}" | jq -Rc 'select(length>0)' | jq -sc .)
+
 if [[ -r $SHELL_CONFIG ]]; then
   say "back up shell.json"
   say "set bar.id = $bar_id"
   for id in "${overlay_ids[@]}"; do
     [[ -n $id ]] && say "add $id to plugins[]"
   done
+  mapfile -t stale_ids < <(
+    jq -r --argjson ids "$ids_json" '(.plugins // [])[] | (.id // "")
+      | select(startswith("dev.omarchyphone.")) | select(. as $id | $ids | index($id) | not)' "$SHELL_CONFIG"
+  )
+  for id in "${stale_ids[@]}"; do
+    say "drop $id from plugins[] (no plugin in this checkout provides it)"
+  done
 
   if ((APPLY)); then
     mkdir -p "$BACKUP_DIR"
     cp -a "$SHELL_CONFIG" "$BACKUP_DIR/shell.json"
     tmp=$(mktemp)
-    jq --arg bar "$bar_id" --argjson ids "$(printf '%s\n' "${overlay_ids[@]}" | jq -Rc 'select(length>0)' | jq -sc .)" '
+    # Ids of ours that no manifest in this checkout provides any more -- a
+    # plugin since replaced, like phone-appgrid by phone-home -- are dropped,
+    # so an upgrade does not leave the host chasing a plugin that is gone.
+    jq --arg bar "$bar_id" --argjson ids "$ids_json" '
       .bar.id = $bar
-      | .plugins = ((.plugins // []) + [$ids[] | {id: .}] | unique_by(.id))
+      | .plugins = ((.plugins // [])
+          | map(select(((.id // "") | startswith("dev.omarchyphone.") | not) or ((.id) as $id | $ids | index($id))))
+          | . + [$ids[] | {id: .}]
+          | unique_by(.id))
     ' "$SHELL_CONFIG" >"$tmp" && mv "$tmp" "$SHELL_CONFIG"
   fi
 else
-  say "create $SHELL_CONFIG (absent)"
+  # Omarchy's shell writes shell.json on its first run. Creating one here would
+  # mean guessing at the rest of its contents.
+  echo "  no $SHELL_CONFIG yet: start Omarchy's shell once, then run this again" >&2
+fi
+
+# --- home screen -------------------------------------------------------------
+step "Home screen"
+# phone-home reads its dock from this file and watches it for edits. A starter
+# holding its built-in defaults gives it a file to watch from the first boot;
+# one that already exists is the user's and is never touched.
+DOCK_FILE="$CONFIG_HOME/omarchy-phone/dock"
+if [[ -e $DOCK_FILE ]]; then
+  echo "  keep ${DOCK_FILE#"$HOME"/} (already present)"
+else
+  say "write ${DOCK_FILE#"$HOME"/} with the default dock"
+  if ((APPLY)); then
+    mkdir -p "$(dirname "$DOCK_FILE")"
+    cat >"$DOCK_FILE" <<'DOCK'
+# Apps in the home screen's dock, one desktop id per line (with or without
+# ".desktop"), left to right; at most four are shown. Save and the dock
+# updates. An empty list means an empty dock.
+chromium
+foot
+org.gnome.Nautilus
+Google Messages
+DOCK
+  fi
 fi
 
 # --- system ------------------------------------------------------------------

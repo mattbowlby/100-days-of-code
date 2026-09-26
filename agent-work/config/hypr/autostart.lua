@@ -1,12 +1,8 @@
 -- Extra autostart processes for the phone session.
 --
--- Empty on purpose, and worth writing down rather than leaving to be rediscovered.
--- upstream's default/hypr/autostart.lua already starts the shell with
--- omarchy-launch-shell, which runs `quickshell -n -p "$OMARCHY_PATH/shell"`.
--- Until shell/ in this repo has a root for that to point at, the phone session
--- inherits the desktop shell: a desktop bar squeezed onto 360 logical px. Ugly,
--- but real, and it lets the session underneath be exercised on hardware now.
---
--- When shell/ lands, the phone shell gets launched from here against this repo's
--- tree instead of $OMARCHY_PATH's, and the desktop one is suppressed. That
--- single line is what this file is waiting for.
+-- Empty on purpose. Upstream's default/hypr/autostart.lua already starts the
+-- shell with omarchy-launch-shell, and that is the right shell: the phone's
+-- surface is not a separate Quickshell config but a set of plugins inside
+-- upstream's host (README.md, NOTES.md), selected by shell.json -- bar.id for
+-- the phone bar, plugins[] for the home screen and keyboard. The installer
+-- writes both. Nothing here needs starting that upstream does not start.

@@ -4,7 +4,7 @@
   "name": "Phone Status Bar",
   "version": "0.1.0",
   "author": "Omarchy Phone",
-  "description": "Portrait status bar: clock and battery, sized for a phone panel.",
+  "description": "Portrait status bar, screen-edge swipes (home, control centre) and the control centre itself.",
   "kinds": [
     "bar"
   ],

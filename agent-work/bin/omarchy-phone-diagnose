@@ -89,7 +89,28 @@ for dir in "$OMARCHY_PHONE_PATH"/plugins/*/; do
     fi
   fi
 done
+
+# Leftovers from plugins this checkout no longer has: a dangling link the host
+# keeps trying to load, or an id in plugins[] nothing provides.
+for target in "$PLUGINS_DIR"/*; do
+  [[ -L $target && ! -e $target ]] || continue
+  no "$(basename "$target"): dangling link in $PLUGINS_DIR (omarchy-phone-plugins-link prunes it)"
+done
+if [[ -r $SHELL_CONFIG ]]; then
+  provided=$(jq -sc '[.[].id]' "$OMARCHY_PHONE_PATH"/plugins/*/manifest.json 2>/dev/null || echo '[]')
+  while IFS= read -r stale; do
+    [[ -n $stale ]] && no "$stale is in shell.json plugins[] but no plugin here provides it"
+  done < <(jq -r --argjson ids "$provided" '(.plugins // [])[] | (.id // "")
+    | select(startswith("dev.omarchyphone.")) | select(. as $id | $ids | index($id) | not)' "$SHELL_CONFIG" 2>/dev/null)
+fi
 shopt -u nullglob
+
+DOCK_FILE="${XDG_CONFIG_HOME:-$HOME/.config}/omarchy-phone/dock"
+if [[ -r $DOCK_FILE ]]; then
+  ok "dock file: $(grep -cv '^[[:space:]]*\(#\|$\)' "$DOCK_FILE") app(s) listed"
+else
+  info "no dock file; the home screen uses its default dock"
+fi
 
 head_ "Tooling"
 if [[ -x ${QMLLINT:-/usr/lib/qt6/bin/qmllint} ]]; then
