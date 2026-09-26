@@ -200,7 +200,7 @@ Both are newer than the first version of this port, and both broke it silently:
   runs in; the build refuses, and the installer leaves Omarchy's own toasts
   on, if a later Service.qml is not laid out as expected. Plugins get no
   other way at the notification list: the first-party service API exposes only
-  `setDoNotDisturb`.
+  `doNotDisturb` and `setDoNotDisturb`.
 
 ## Verifying QML
 

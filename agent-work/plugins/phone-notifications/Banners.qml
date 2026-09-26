@@ -58,7 +58,8 @@ Item {
         anchors.horizontalCenter: parent.horizontalCenter
         anchors.top: parent.top
         anchors.topMargin: bannerWindow.placement.margins.top
-        width: Math.min(bannerWindow.width - Style.spacing.md * 2, Style.space(420))
+        // The home screen's margins and its search sheet's widest.
+        width: Math.min(bannerWindow.width - Style.spacing.xxl * 2, Style.space(480))
         // As tall as the banners, up to half the screen; past that -- a
         // history replay, a burst -- they scroll.
         height: Math.min(contentHeight, Math.round(bannerWindow.height / 2))
@@ -66,6 +67,10 @@ Item {
         boundsBehavior: Flickable.StopAtBounds
         clip: true
         spacing: Style.spacing.sm
+        // Every banner stays created, scrolled out of view or not: each
+        // carries its own countdown, which a delegate destroyed and made
+        // again would restart. Few enough (history keeps ten) to be cheap.
+        cacheBuffer: 100000
 
         // Newest first: the service inserts new rows at the top.
         model: banners.notifications.popupModel
@@ -96,10 +101,21 @@ Item {
     return Quickshell.iconPath(value, true)
   }
 
-  // "now" for anything under a minute old, which is every live banner; a
-  // replayed history row says how long ago it came.
+  // The time the age labels count from, kept current while banners are up.
+  property real clock: Date.now()
+
+  Timer {
+    interval: 30000
+    repeat: true
+    running: banners.notifications.popupModel.count > 0
+    triggeredOnStart: true
+    onTriggered: banners.clock = Date.now()
+  }
+
+  // "now" under a minute, then minutes, hours, days: a critical banner left
+  // up, or a replayed history row, says how long ago it came.
   function age(timestamp) {
-    var seconds = (Date.now() - Number(timestamp || 0)) / 1000
+    var seconds = (banners.clock - Number(timestamp || 0)) / 1000
     if (!isFinite(seconds) || seconds < 60) return "now"
     if (seconds < 3600) return Math.floor(seconds / 60) + "m ago"
     if (seconds < 86400) return Math.floor(seconds / 3600) + "h ago"
@@ -166,9 +182,9 @@ Item {
       // The home screen's search sheet, at banner size.
       radius: Style.space(22)
       color: Util.alpha(Color.background, 0.72)
-      border.width: Math.max(1, Style.space(1))
-      // Critical ones carry the theme's urgent colour on the rim.
-      border.color: slot.urgency === 2 ? Color.urgent : Util.alpha(Color.foreground, 0.22)
+      // Critical ones carry the theme's urgent colour on a heavier rim.
+      border.width: slot.urgency === 2 ? Math.max(2, Style.space(2)) : Math.max(1, Style.space(1))
+      border.color: slot.urgency === 2 ? Color.urgent : Util.alpha(Color.foreground, 0.18)
       opacity: 1 - Math.min(0.7, Math.abs(dx) / Math.max(1, width))
 
       Behavior on x {
@@ -209,7 +225,10 @@ Item {
         Text {
           anchors.centerIn: parent
           visible: icon.status !== Image.Ready
+          // Plain text: the glyph comes from the sender's hints, and rich
+          // text there could load images (upstream's card does the same).
           text: slot.glyph.length > 0 ? slot.glyph : ""
+          textFormat: Text.PlainText
           color: Color.foreground
           font.family: Style.font.family
           font.pixelSize: Math.round(slot.iconSize * 0.5)

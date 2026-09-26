@@ -158,7 +158,7 @@ if [[ -r $SHELL_CONFIG ]]; then
   if $banners; then
     say "switch off omarchy.notifications (the phone's banners replace it)"
   elif ((APPLY)); then
-    say "keep omarchy.notifications on (the phone's banners are not built)"
+    say "keep omarchy.notifications on (the phone's banners are not built, or not linked from this checkout)"
   else
     say "add dev.omarchyphone.notifications to plugins[] and switch off omarchy.notifications if the banners build, else keep it on"
   fi
