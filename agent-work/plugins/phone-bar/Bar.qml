@@ -356,7 +356,10 @@ Item {
       onPositionChanged: function(mouse) {
         if (pressY < 0) return
         var travelled = edgeWindow.edge === "bottom" ? pressY - mouse.y : mouse.y - pressY
-        if (travelled < root.triggerDistance) {
+        // Once armed, the line to fall back below sits holdTolerance lower, so
+        // a thumb resting right at the threshold does not flicker in and out.
+        var line = armed ? root.triggerDistance - root.holdTolerance : root.triggerDistance
+        if (travelled < line) {
           // Dragged back down: that is a cancel, as on iOS, not a swipe
           // waiting to happen. Coming back up arms it afresh.
           if (armed) {
