@@ -8,3 +8,4 @@ SystemClock 1.0 SystemClock.qml
 ExclusionMode 1.0 ExclusionMode.qml
 singleton PreviewEnv 1.0 PreviewEnv.qml
 SurfaceFormat 1.0 SurfaceFormat.qml
+singleton DesktopEntries 1.0 DesktopEntries.qml

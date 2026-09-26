@@ -70,6 +70,10 @@ PanelWindow {
   // for a browser is the page and for a terminal the working directory. The
   // title stands in when no desktop entry matches the app id.
   function appName(toplevel) {
+    // Read only so the binding depends on it: the entry scan finishes
+    // asynchronously and reruns on installs, and a lookup made before would
+    // otherwise keep the title fallback for good.
+    var entries = DesktopEntries.applications.values
     var appId = toplevel && toplevel.wayland ? String(toplevel.wayland.appId || "") : ""
     var entry = appId ? DesktopEntries.heuristicLookup(appId) : null
     return entry && entry.name ? entry.name : String((toplevel && toplevel.title) || "")
@@ -77,12 +81,18 @@ PanelWindow {
 
   // Opens on the app that was in front, as iOS's does, rather than wherever
   // the row was left last time.
-  onVisibleChanged: {
-    if (!visible) return
-    var index = apps.indexOf(Hyprland.activeToplevel)
-    cards.positionViewAtIndex(Math.max(0, index), ListView.Center)
-    cards.currentIndex = Math.max(0, index)
+  // currentIndex first, then the jump: the other way round, the index change
+  // would slide the row from the old card after the jump. On the first open
+  // the surface only learns its size after it is shown, so a resize while
+  // open repositions too.
+  function showCurrent() {
+    var index = Math.max(0, apps.indexOf(Hyprland.activeToplevel))
+    cards.currentIndex = index
+    cards.positionViewAtIndex(index, ListView.Center)
   }
+
+  onVisibleChanged: if (visible) showCurrent()
+  onWidthChanged: if (visible) showCurrent()
 
   function closeApp(toplevel) {
     var target = selector(toplevel)
@@ -127,6 +137,7 @@ PanelWindow {
     preferredHighlightBegin: (width - switcher.cardWidth) / 2
     preferredHighlightEnd: (width + switcher.cardWidth) / 2
     highlightRangeMode: ListView.StrictlyEnforceRange
+    highlightMoveDuration: 0
     snapMode: ListView.SnapToItem
     model: switcher.apps
 
