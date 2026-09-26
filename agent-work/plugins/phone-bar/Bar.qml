@@ -549,10 +549,35 @@ Item {
   // until its level is known.
   property real brightnessLevel: -1
   property real volumeLevel: -1
+  // Never all the way down: a black panel is a phone that looks dead.
+  readonly property real brightnessFloor: 0.05
+
+  // A read that started before the latest change is out of date by the time
+  // it lands -- a DDC read can take a second, long enough for a drag -- so
+  // each change counts, and a read keeps its answer only if nothing changed
+  // while it ran. After the last change is applied the level is read again,
+  // so the slider ends on what the system really holds (a set can be dropped:
+  // omarchy-brightness-display gives way to a key press already running).
+  property int brightnessChanges: 0
+  property int volumeChanges: 0
+  property int brightnessReadAt: 0
+  property int volumeReadAt: 0
 
   function readLevels() {
-    if (!brightnessRead.running) brightnessRead.running = true
-    if (!volumeRead.running) volumeRead.running = true
+    readBrightness()
+    readVolume()
+  }
+
+  function readBrightness() {
+    if (brightnessRead.running) return
+    brightnessReadAt = brightnessChanges
+    brightnessRead.running = true
+  }
+
+  function readVolume() {
+    if (volumeRead.running) return
+    volumeReadAt = volumeChanges
+    volumeRead.running = true
   }
 
   function levelFrom(text) {
@@ -563,13 +588,26 @@ Item {
   Process {
     id: brightnessRead
     command: ["omarchy-brightness-display", "--no-osd"]
-    stdout: StdioCollector { onStreamFinished: root.brightnessLevel = root.levelFrom(text) }
+    stdout: StdioCollector {
+      onStreamFinished: {
+        if (root.brightnessReadAt === root.brightnessChanges && !brightnessSet.running)
+          root.brightnessLevel = root.levelFrom(text)
+      }
+    }
   }
 
   Process {
     id: volumeRead
-    command: ["sh", "-c", "s=$(omarchy-audio-output-sink) && pactl get-sink-volume \"$s\" | grep -o '[0-9]*%' | head -n 1 | tr -d %"]
-    stdout: StdioCollector { onStreamFinished: root.volumeLevel = root.levelFrom(text) }
+    // Muted reads as 0, as iOS shows it.
+    command: ["sh", "-c", "s=$(omarchy-audio-output-sink) || exit 1; "
+      + "if pactl get-sink-mute \"$s\" | grep -q yes; then echo 0; "
+      + "else pactl get-sink-volume \"$s\" | grep -o '[0-9]*%' | head -n 1 | tr -d %; fi"]
+    stdout: StdioCollector {
+      onStreamFinished: {
+        if (root.volumeReadAt === root.volumeChanges && !volumeSet.running)
+          root.volumeLevel = root.levelFrom(text)
+      }
+    }
   }
 
   // A drag sends a level per move; each is applied in turn, and only the
@@ -578,15 +616,15 @@ Item {
   property real pendingVolume: -1
 
   function setBrightness(level) {
-    brightnessLevel = level
-    pendingBrightness = level
+    brightnessChanges++
+    brightnessLevel = Math.max(brightnessFloor, level)
+    pendingBrightness = brightnessLevel
     if (!brightnessSet.running) applyBrightness()
   }
 
   function applyBrightness() {
     if (pendingBrightness < 0) return
-    // Never all the way down: a black panel is a phone that looks dead.
-    var percent = Math.max(5, Math.round(pendingBrightness * 100))
+    var percent = Math.round(pendingBrightness * 100)
     pendingBrightness = -1
     brightnessSet.command = ["omarchy-brightness-display", "--no-osd", percent + "%"]
     brightnessSet.running = true
@@ -594,10 +632,15 @@ Item {
 
   Process {
     id: brightnessSet
-    onRunningChanged: if (!running) Qt.callLater(root.applyBrightness)
+    onRunningChanged: {
+      if (running) return
+      if (root.pendingBrightness >= 0) Qt.callLater(root.applyBrightness)
+      else root.readBrightness()
+    }
   }
 
   function setVolume(level) {
+    volumeChanges++
     volumeLevel = level
     pendingVolume = level
     if (!volumeSet.running) applyVolume()
@@ -618,7 +661,11 @@ Item {
 
   Process {
     id: volumeSet
-    onRunningChanged: if (!running) Qt.callLater(root.applyVolume)
+    onRunningChanged: {
+      if (running) return
+      if (root.pendingVolume >= 0) Qt.callLater(root.applyVolume)
+      else root.readVolume()
+    }
   }
 
   // A level from 0 to 1 on the tiles' frosted plate, filled from the start in
@@ -629,6 +676,8 @@ Item {
 
     property string icon: ""
     property real value: 0
+    // The lowest it goes, and shows, under a finger.
+    property real minimum: 0
     signal moved(real level)
 
     // Under a finger it shows the finger, not the last level read back.
@@ -675,7 +724,7 @@ Item {
       preventStealing: true
 
       function levelAt(x) {
-        return Math.max(0, Math.min(1, x / Math.max(1, width)))
+        return Math.max(slider.minimum, Math.min(1, x / Math.max(1, width)))
       }
 
       onPressed: function(mouse) { slider.dragLevel = levelAt(mouse.x); slider.moved(slider.dragLevel) }
@@ -745,8 +794,9 @@ Item {
     // side, the same frosted plate -- four across, with a glyph at 0.45 of the
     // side where the home screen has an app icon. The size is worked out from
     // the card's inner width so four always fit, whatever the theme's font
-    // scale does; the card is then sized from the grid, so its padding is even
-    // on all four sides.
+    // scale does; the card is then sized from what it holds -- the grid and the
+    // sliders under it, a full row of tiles wide -- so its padding is even on
+    // all four sides.
     readonly property int pad: Style.spacing.xxl
     readonly property int gap: Style.spacing.lg
     readonly property int tileSize: Math.max(0, Math.min(Style.space(64),
@@ -810,6 +860,9 @@ Item {
       Grid {
         id: tileGrid
 
+        // Centred when hardware leaves fewer than four tiles: the sliders set
+        // the card's width now.
+        anchors.horizontalCenter: parent.horizontalCenter
         columns: 4
         columnSpacing: sheetWindow.gap
         rowSpacing: sheetWindow.gap
@@ -885,6 +938,7 @@ Item {
         height: sheetWindow.sliderHeight
         radius: Math.round(sheetWindow.tileSize * 0.27)
         visible: root.brightnessLevel >= 0
+        minimum: root.brightnessFloor
         icon: "\uf185"
         value: root.brightnessLevel
         onMoved: function(level) { root.setBrightness(level) }

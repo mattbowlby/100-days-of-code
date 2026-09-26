@@ -10,7 +10,8 @@ hour while work is going on. Newest entry first.
   the icon follow your finger.
 - They move the same things the phone's keys would: the screen's backlight,
   and the speaker or headphones you are listening on. Turning the volume up
-  unmutes. Brightness stops at 5% so the screen never goes fully dark.
+  unmutes, and a muted speaker shows as empty. Brightness stops at 5% so the
+  screen never goes fully dark.
 - Each reads its level when the control centre opens, and stays hidden if it
   cannot (no backlight to control, no sound device).
 - Preview: `previews/13-control-centre-sliders.png`. Not yet tried on a phone.
