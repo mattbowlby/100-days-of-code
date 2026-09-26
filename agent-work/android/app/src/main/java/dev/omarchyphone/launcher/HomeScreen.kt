@@ -161,7 +161,10 @@ fun HomeScreen(
                         detectVerticalDragGestures(
                             onDragStart = { start ->
                                 dragged = 0f
-                                fromCorner = start.x > size.width * 0.6f && start.y < 96.dp.toPx()
+                                // The right two columns of the top row: a
+                                // column edge, so no icon is split between the
+                                // two gestures.
+                                fromCorner = start.x > size.width / 2f && start.y < 96.dp.toPx()
                             },
                             onVerticalDrag = { _, dy -> dragged += dy },
                             onDragEnd = {

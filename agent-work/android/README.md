@@ -43,7 +43,9 @@ To go back to Samsung's own home screen, choose **One UI Home** there.
   Back to close it.
 - **Swipe down from the top right** for the control panel. The first time,
   the brightness slider says "Tap to allow brightness": tap it, switch on
-  "Allow modifying system settings" for Omarchy Home, and come back. Wi-Fi
+  "Allow modifying system settings" for Omarchy Home, and come back. While
+  Adaptive brightness is on, the slider says "Auto"; moving it switches
+  Adaptive brightness off, as its label then shows. Wi-Fi
   and Bluetooth open Android's own switches for them (apps are not allowed to
   flip those directly).
 - **Press Home** while on the home screen to go back to the first page.

@@ -66,6 +66,13 @@ class HomeActivity : ComponentActivity() {
         controls.start()
     }
 
+    // Back from a settings page (the brightness permission, say) or another
+    // app: the panel shows what is true now.
+    override fun onResume() {
+        super.onResume()
+        controls.refresh()
+    }
+
     override fun onStop() {
         windowManager.removeCrossWindowBlurEnabledListener(blurListener)
         controls.stop()

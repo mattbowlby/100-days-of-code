@@ -89,8 +89,14 @@ fun ControlPanel(controls: Controls, theme: OmarchyTheme, tile: Dp, onClose: () 
                 width = rowWidth,
                 height = tile * 0.62f,
                 radius = tile * 0.27f,
-                minimum = 0.05f,
-                hint = if (controls.canSetBrightness) null else "Tap to allow brightness",
+                minimum = Controls.BRIGHTNESS_FLOOR,
+                hint = when {
+                    !controls.canSetBrightness -> "Tap to allow brightness"
+                    controls.autoBrightness -> "Auto"
+                    else -> null
+                },
+                // Only the permission hint turns the slider into a button.
+                blocking = !controls.canSetBrightness,
                 onMoved = { if (controls.canSetBrightness) controls.changeBrightness(it) else controls.askForBrightness() },
             )
             LevelSlider(
@@ -159,6 +165,7 @@ private fun LevelSlider(
     radius: Dp,
     minimum: Float = 0f,
     hint: String? = null,
+    blocking: Boolean = false,
     onMoved: (Float) -> Unit,
 ) {
     val shape = RoundedCornerShape(radius)
@@ -173,13 +180,13 @@ private fun LevelSlider(
             .background(theme.background.copy(alpha = 0.32f))
             .background(theme.foreground.copy(alpha = 0.08f))
             .border(1.dp, theme.foreground.copy(alpha = 0.22f), shape)
-            .pointerInput(hint) {
+            .pointerInput(blocking) {
                 fun level(x: Float) = (x / size.width).coerceIn(minimum, 1f)
                 detectTapGestures { onMoved(level(it.x)) }
             }
-            .pointerInput(hint) {
+            .pointerInput(blocking) {
                 fun level(x: Float) = (x / size.width).coerceIn(minimum, 1f)
-                if (hint != null) return@pointerInput
+                if (blocking) return@pointerInput
                 detectHorizontalDragGestures(
                     onDragStart = { dragging = true; dragLevel = level(it.x); onMoved(dragLevel) },
                     onDragEnd = { dragging = false },
@@ -196,14 +203,16 @@ private fun LevelSlider(
                 .clip(shape)
                 .background(theme.foreground.copy(alpha = 0.85f)),
         )
-        Row(Modifier.fillMaxSize().padding(horizontal = height * 0.3f), verticalAlignment = Alignment.CenterVertically) {
-            // Dark on the fill, light off it.
-            val onFill = fillWidth > height * 0.6f
+        // The icon centred in the slider's first square, as on the Linux port;
+        // dark once the fill passes its middle, light before.
+        val iconSize = height * 0.45f
+        Row(Modifier.fillMaxSize().padding(start = (height - iconSize) / 2, end = height * 0.3f), verticalAlignment = Alignment.CenterVertically) {
+            val onFill = fillWidth > height / 2
             Icon(
                 icon,
                 contentDescription = null,
                 tint = if (onFill) theme.background else theme.foreground,
-                modifier = Modifier.size(height * 0.45f),
+                modifier = Modifier.size(iconSize),
             )
             if (hint != null) {
                 Text(
