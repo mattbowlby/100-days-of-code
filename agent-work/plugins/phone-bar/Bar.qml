@@ -527,8 +527,8 @@ Item {
 
               anchors.top: controlPlate.bottom
               anchors.topMargin: Style.spacing.xs
-              // Half the gap to each neighbour is borrowed, so "Night Light"
-              // fits and neighbouring labels still never touch.
+              // A quarter of the gap on each side is borrowed, so "Night Light"
+              // fits and neighbouring labels keep half the gap between them.
               anchors.horizontalCenter: parent.horizontalCenter
               width: parent.width + sheetWindow.gap / 2
               text: controlTile.modelData.label

@@ -16,7 +16,7 @@ hour while work is going on. Newest entry first.
 - **Unfolded foldables** (shortest side of 600 px or more) show two pages side
   by side. A phone in landscape stays one page.
 - **Control centre**: swipe down from the top.
-  - Tiles for Wi-Fi, Bluetooth, sound, battery, display, lock, screenshot,
+  - Tiles for Wi-Fi, Bluetooth, sound, battery, display, screenshot,
     night light and stay-awake, all in the home screen's tile shape.
   - Everything behind it frosts over, like iOS.
 - **Swipe up from the bottom** goes home. Doing it again while already home

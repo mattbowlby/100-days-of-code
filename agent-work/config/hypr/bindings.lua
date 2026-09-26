@@ -20,19 +20,27 @@
 -- keyboard cannot be unlocked at all. Until a phone lock with its own PIN pad
 -- exists (NOTES.md), locking would brick the session.
 --
--- Off only from on, and a beat after the press. Hyprland runs a key's binds
--- first and then, for the same event, wakes the panel if it is off
--- (misc:key_press_enables_dpms, hypr/input.lua). Turning off inside the bind
--- would be undone by that wake on the spot, and toggling would turn a woken
--- panel straight back off; so a press on a dark panel is left to the wake,
--- and a press on a lit one blanks it once the key events are through.
+-- Off only from on, and only once the button is let go. Hyprland runs a key's
+-- binds first and then, for the same event -- press and release alike -- wakes
+-- the panel if it is off (misc:key_press_enables_dpms, hypr/input.lua).
+-- Turning off inside the bind would be undone by that wake on the spot, a
+-- fixed delay would be undone by the release of a slow press, and toggling
+-- would turn a woken panel straight back off. So a press on a dark panel is
+-- left to the wake, and a press on a lit one blanks it after the release.
+local function screen_off_after_release()
+  hl.timer(function()
+    if hl.is_key_down("XF86PowerOff") then
+      return screen_off_after_release()
+    end
+    hl.dispatch(hl.dsp.dpms({ action = "off" }))
+  end, { timeout = 50, type = "oneshot" })
+end
+
 hl.unbind("XF86PowerOff")
 hl.bind("XF86PowerOff", function()
   local monitor = hl.get_active_monitor()
   if not monitor or not monitor.dpms_status then
     return
   end
-  hl.timer(function()
-    hl.dispatch(hl.dsp.dpms({ action = "off" }))
-  end, { timeout = 400, type = "oneshot" })
+  screen_off_after_release()
 end, { description = "Screen off" })
