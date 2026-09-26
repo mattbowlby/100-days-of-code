@@ -55,3 +55,18 @@ OMARCHY_PATH=~/src/omarchy tools/preview/render.py \
   The first is on the focused workspace, so the bar renders as it does over an
   app, with the home indicator, and the app switcher has cards. For example:
   `TOPLEVELS=3 tools/preview/render.py ... --actions 'plugins[0].openSwitcher()'`.
+
+### Notification banners
+
+`Banners.qml` needs the logic file its build copies in, and a notification
+service to read from. `fixtures/NotificationsPreview.qml` stands in for the
+service with three notifications. Build the plugin, copy it and the fixture
+into one directory, and load the fixture:
+
+```bash
+bin/omarchy-phone-notifications-build
+dir=$(mktemp -d) && cp -a plugins/phone-notifications/. tools/preview/fixtures/NotificationsPreview.qml "$dir"/
+tools/preview/render.py --plugin plugins/phone-bar:Bar.qml \
+  --plugin plugins/phone-home:Home.qml --plugin "$dir":NotificationsPreview.qml \
+  --w 360 --h 780 --scale 3 --theme tokyo-night --out /tmp/banners.png
+```

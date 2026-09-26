@@ -29,7 +29,7 @@ def main():
     ap.add_argument("--w", type=int, default=360); ap.add_argument("--h", type=int, default=780)
     ap.add_argument("--scale", type=int, default=3)
     ap.add_argument("--theme", default="tokyo-night"); ap.add_argument("--wallpaper", default="")
-    ap.add_argument("--blur", default="omarchy-phone-bar,omarchy-phone-home,omarchy-phone-control,omarchy-phone-keyboard")
+    ap.add_argument("--blur", default="omarchy-phone-bar,omarchy-phone-home,omarchy-phone-control,omarchy-phone-keyboard,omarchy-phone-switcher,omarchy-notifications")
     ap.add_argument("--out", required=True)
     ap.add_argument("--apps", default="", help="JSON list of {id,name,icon}; default: Omarchy's web-app icons")
     ap.add_argument("--actions", default="", help="JS run after load, with `plugins` array in scope")

@@ -1,7 +1,8 @@
 import QtQuick
 Item {
   property var model: []
-  property Component delegate
+  // Default, as in Quickshell: a bare child is the delegate.
+  default property Component delegate
   property var instances: []
   Component.onCompleted: {
     var out = []

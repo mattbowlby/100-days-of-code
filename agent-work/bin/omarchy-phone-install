@@ -71,6 +71,19 @@ for source in "$OMARCHY_PHONE_PATH"/config/hypr/*.lua; do
   fi
 done
 
+# --- notification banners ----------------------------------------------------
+step "Notification banners"
+# Built from the notifications plugin of the Omarchy installed here, so it
+# matches the shell that runs it; see the script. Before linking, which skips a
+# plugin directory without a manifest -- and a failed build writes none, so
+# Omarchy's own notifications then stay in charge (see "Shell config").
+if ((APPLY)); then
+  OMARCHY_PATH="${OMARCHY_PATH:-/usr/share/omarchy}" "$OMARCHY_PHONE_PATH/bin/omarchy-phone-notifications-build" \
+    || echo "  banners not built; Omarchy's own notifications stay on" >&2
+else
+  say "build phone-notifications from Omarchy's notifications plugin"
+fi
+
 # --- shell plugins -----------------------------------------------------------
 step "Shell plugins"
 if ((APPLY)); then
@@ -94,6 +107,13 @@ mapfile -t overlay_ids < <(
 )
 
 ids_json=$(printf '%s\n' "${overlay_ids[@]}" | jq -Rc 'select(length>0)' | jq -sc .)
+
+# The banners stand in for Omarchy's notification service, so the built-in is
+# switched off while they are built (two notification servers cannot both run)
+# and back on while they are not, so the phone is never left without either.
+# This is what `omarchy plugin enable` does for any clone of a built-in.
+banners=false
+[[ -f $OMARCHY_PHONE_PATH/plugins/phone-notifications/manifest.json ]] && banners=true
 
 # Omarchy's idle service locks the session after idle.lock seconds (upstream
 # default 300), and its lock asks for a typed password the phone cannot enter:
@@ -128,6 +148,13 @@ if [[ -r $SHELL_CONFIG ]]; then
     say "drop $id from plugins[] (no plugin in this checkout provides it)"
   done
   say "push idle.lock and idle.screensaver out to $IDLE_NEVER s (no auto-lock until the phone has a PIN-pad lock)"
+  if $banners; then
+    say "switch off omarchy.notifications (the phone's banners replace it)"
+  elif ((APPLY)); then
+    say "keep omarchy.notifications on (the phone's banners are not built)"
+  else
+    say "add dev.omarchyphone.notifications to plugins[] and switch off omarchy.notifications if the banners build, else keep it on"
+  fi
 
   if ((APPLY)); then
     mkdir -p "$BACKUP_DIR"
@@ -138,8 +165,13 @@ if [[ -r $SHELL_CONFIG ]]; then
     # so an upgrade does not leave the host chasing a plugin that is gone.
     # Duplicates by id are dropped keeping the first, in order; entries with no
     # id are not ours to judge and pass through untouched.
-    jq --arg bar "$bar_id" --argjson ids "$ids_json" --argjson never "$IDLE_NEVER" '
+    jq --arg bar "$bar_id" --argjson ids "$ids_json" --argjson never "$IDLE_NEVER" \
+      --argjson banners "$banners" '
       .bar.id = $bar
+      | .disabledPlugins = ((if (.disabledPlugins | type) == "array" then .disabledPlugins else [] end)
+          | map(select(. != "omarchy.notifications"))
+          | if $banners then . + ["omarchy.notifications"] else . end)
+      | if .disabledPlugins == [] then del(.disabledPlugins) else . end
       | .idle = ((if (.idle | type) == "object" then .idle else {} end) + {lock: $never, screensaver: $never})
       | .plugins = ((if (.plugins | type) == "array" then .plugins else [] end)
           | map(select(((.id // "") | tostring | startswith("dev.omarchyphone.") | not)

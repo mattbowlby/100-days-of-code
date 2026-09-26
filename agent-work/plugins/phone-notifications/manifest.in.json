@@ -1,0 +1,6 @@
+{
+  "id": "dev.omarchyphone.notifications",
+  "name": "Phone Notifications",
+  "author": "Omarchy Phone",
+  "description": "Omarchy's notification service with iOS-style banners; built by bin/omarchy-phone-notifications-build."
+}

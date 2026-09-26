@@ -51,6 +51,11 @@ shopt -s nullglob
 for dir in "$OMARCHY_PHONE_PATH"/plugins/*/; do
   name=$(basename "$dir")
   manifest="$dir/manifest.json"
+  # phone-notifications is built on the phone, from the Omarchy installed there.
+  if [[ ! -f $manifest && -f $dir/manifest.in.json ]]; then
+    no "$name is not built (omarchy-phone-notifications-build); Omarchy's own notifications are used"
+    continue
+  fi
   [[ -f $manifest ]] || { no "$name has no manifest.json"; continue; }
 
   id=$(jq -r '.id // ""' "$manifest" 2>/dev/null)
@@ -111,6 +116,21 @@ if [[ -r $SHELL_CONFIG ]]; then
     | select(startswith("dev.omarchyphone.")) | select(. as $id | $ids | index($id) | not)' "$SHELL_CONFIG" 2>/dev/null)
 fi
 shopt -u nullglob
+
+# Exactly one notification service: the banners with the built-in off, or the
+# built-in on its own. Both on is two servers fighting over the bus name; both
+# off is a phone that never shows a notification.
+if [[ -r $SHELL_CONFIG ]]; then
+  builtin_off=$(jq -r '(.disabledPlugins // []) | index("omarchy.notifications") != null' "$SHELL_CONFIG" 2>/dev/null)
+  banners_on=$(jq -r '(.plugins // []) | any(.id == "dev.omarchyphone.notifications")' "$SHELL_CONFIG" 2>/dev/null)
+  [[ -f $OMARCHY_PHONE_PATH/plugins/phone-notifications/manifest.json ]] || banners_on=false
+  case "$banners_on/$builtin_off" in
+  true/true) ok "notifications: the phone's banners (omarchy.notifications off)" ;;
+  false/false) ok "notifications: Omarchy's own toasts (banners not in use)" ;;
+  true/false) no "notifications: banners AND omarchy.notifications both on (re-run omarchy-phone-install --apply)" ;;
+  *) no "notifications: none -- omarchy.notifications is off and the banners are not in use (re-run omarchy-phone-install --apply)" ;;
+  esac
+fi
 
 DOCK_FILE="${XDG_CONFIG_HOME:-$HOME/.config}/omarchy-phone/dock"
 if [[ -r $DOCK_FILE ]]; then

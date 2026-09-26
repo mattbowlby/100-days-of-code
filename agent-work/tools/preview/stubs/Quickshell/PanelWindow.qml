@@ -12,6 +12,7 @@ Window {
   property int wlrLayer: 2
   property int wlrKeyboardFocus: 0
   property SurfaceFormat surfaceFormat: SurfaceFormat {}
+  property var mask: null
   visible: true
   flags: Qt.FramelessWindowHint
   Component.onCompleted: Quickshell.register(this)

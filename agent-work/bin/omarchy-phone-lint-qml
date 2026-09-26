@@ -50,8 +50,21 @@ fi
 files=()
 for target in "${targets[@]}"; do
   if [[ -d $target ]]; then
-    while IFS= read -r -d '' file; do files+=("$file"); done \
-      < <(find "$target" -name '*.qml' -print0)
+    # phone-notifications' Service.qml and components/ are upstream's own,
+    # copied in by its build; they are Omarchy's to lint. Banners.qml imports
+    # the logic that build copies in, so it is linted only once built.
+    while IFS= read -r -d '' file; do
+      case $file in
+      */phone-notifications/Service.qml | */phone-notifications/components/*) continue ;;
+      */phone-notifications/Banners.qml)
+        if [[ ! -f ${file%/*}/NotificationLogic.js ]]; then
+          echo "skipped $file: not built (omarchy-phone-notifications-build)"
+          continue
+        fi
+        ;;
+      esac
+      files+=("$file")
+    done < <(find "$target" -name '*.qml' -print0)
   elif [[ -e $target ]]; then
     files+=("$target")
   elif [[ $default_run == true ]]; then

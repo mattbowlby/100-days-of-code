@@ -1,0 +1,6 @@
+# Written by bin/omarchy-phone-notifications-build from the installed Omarchy.
+/manifest.json
+/manifest.json.tmp
+/Service.qml
+/NotificationLogic.js
+/components/

@@ -1,0 +1,87 @@
+#!/bin/bash
+
+# omarchy:summary=Build the phone's notification banners from Omarchy's own notification service.
+# omarchy:args=[--clean]
+# omarchy:examples=omarchy-phone-notifications-build
+
+# The banners are a stand-in for Omarchy's notifications plugin, made the way
+# `omarchy plugin clone` makes one: a copy of the built-in, marked clonedFrom
+# it, which the shell then routes the built-in's calls to (do-not-disturb,
+# history, IPC). Only the popup windows are ours. Everything else -- the
+# notification server, history, persistence -- is copied from the Omarchy
+# installed here at build time, so it always matches the shell that runs it.
+#
+# The copy lands in plugins/phone-notifications/ next to Banners.qml and is not
+# committed (see its .gitignore). Re-run this after an Omarchy update.
+
+set -euo pipefail
+
+OMARCHY_PHONE_PATH="${OMARCHY_PHONE_PATH:-$(dirname "$(dirname "$(readlink -f "$0")")")}"
+OMARCHY_PATH="${OMARCHY_PATH:-/usr/share/omarchy}"
+SOURCE="$OMARCHY_PATH/shell/plugins/notifications"
+TARGET="$OMARCHY_PHONE_PATH/plugins/phone-notifications"
+
+# Everything the build writes. manifest.json last, and only on success: the
+# link script and the installer take a plugin directory without one as not
+# there, so a failed build leaves Omarchy's own notifications in charge.
+GENERATED=(manifest.json Service.qml NotificationLogic.js components)
+
+clean() {
+  local name
+  for name in "${GENERATED[@]}"; do rm -rf -- "${TARGET:?}/$name"; done
+}
+
+fail() {
+  echo "omarchy-phone-notifications-build: $*" >&2
+  clean
+  exit 1
+}
+
+if [[ ${1:-} == --clean ]]; then
+  clean
+  exit 0
+fi
+
+for file in manifest.json Service.qml NotificationLogic.js components/NotificationCard.qml; do
+  [[ -e $SOURCE/$file ]] || { echo "omarchy-phone-notifications-build: no $SOURCE/$file" >&2; exit 1; }
+done
+[[ -f $TARGET/Banners.qml && -f $TARGET/manifest.in.json ]] \
+  || { echo "omarchy-phone-notifications-build: $TARGET is incomplete" >&2; exit 1; }
+
+clean
+cp -a "$SOURCE/NotificationLogic.js" "$TARGET/"
+cp -a "$SOURCE/components" "$TARGET/"
+
+# Service.qml ends with its popup windows: one Variants block, the last thing
+# in the file, closed by the service's own brace. That block is swapped for the
+# banners. Checked rather than assumed -- a later Omarchy that moves things
+# around fails here, loudly, instead of shipping two sets of popups or none.
+# The comment above the block describes upstream's toasts, so it goes too:
+# comment and blank lines are held back until the next code line, and dropped
+# if that line is the block's start.
+awk '
+  function flush() { if (held != "") printf "%s", held; held = "" }
+  NF { last = $0 }
+  cut { if (/WlrLayershell\.namespace: "omarchy-notifications"/) named = 1; next }
+  /^[[:space:]]*(\/\/.*)?$/ { held = held $0 "\n"; next }
+  /^  Variants \{$/ { starts++; cut = 1; held = ""; next }
+  { flush(); print }
+  END {
+    if (starts != 1 || !named || last != "}") exit 1
+    print ""
+    print "  // The popups: iOS-style banners (Banners.qml), swapped in for the"
+    print "  // desktop toasts by bin/omarchy-phone-notifications-build."
+    print "  Banners { notifications: service }"
+    print "}"
+  }
+' "$SOURCE/Service.qml" >"$TARGET/Service.qml" \
+  || fail "Service.qml is not laid out as expected (one popup Variants block at the end); not built"
+
+# The service's own id, kinds and entry points, with ours on top.
+jq -s '.[0] as $source | .[1] as $ours
+    | ($source * $ours) | .omarchy.clonedFrom = $source.id' \
+  "$SOURCE/manifest.json" "$TARGET/manifest.in.json" >"$TARGET/manifest.json.tmp" \
+  || fail "could not write manifest.json"
+mv "$TARGET/manifest.json.tmp" "$TARGET/manifest.json"
+
+echo "built $(jq -r .id "$TARGET/manifest.json") from $SOURCE"

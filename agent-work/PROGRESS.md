@@ -3,6 +3,25 @@
 Pushed to `agent-work/` on branch `claude/nifty-hamilton-ezxf50` at least once an
 hour while work is going on. Newest entry first.
 
+## 2026-09-26 (evening): notification banners
+
+- **Notifications now drop in as iOS-style banners** at the top of the
+  screen, on the same frosted plate as the home screen's search, each with the
+  app's icon on the home screen's tile shape, its name, and how long ago it
+  came ("now" for new ones). Tap one to open it; swipe it left or right to
+  clear it; keep a finger on one to hold it on screen. Critical ones (a battery
+  alarm, say) stay until cleared and have a rim in the theme's urgent colour.
+  More than half a screen of them scrolls.
+- **Everything else is Omarchy's own notification service**, unchanged:
+  do-not-disturb, history, how long each banner stays. The installer builds a
+  copy of it from the Omarchy on the phone with only the popups swapped, and
+  switches the built-in one off. If that build fails, Omarchy's own desktop
+  toasts stay on instead, so notifications never go missing.
+  `omarchy-phone-diagnose` says which of the two is in use.
+- After an Omarchy update, run `omarchy-phone-notifications-build` (or the
+  installer) again so the copy matches the new Omarchy.
+- Preview: `previews/11-notification-banners.png`.
+
 ## 2026-09-26 (later): keyboard restyle, opt-in lock
 
 - **Keyboard look**: see-through and frosted like the home screen, with
@@ -134,7 +153,7 @@ phone. See the next entry for the opt-in lock.
 - **Nothing has run on a real phone.** The renders come from an offscreen
   harness with Quickshell stubbed out, not from the real shell.
 - **Missing iOS pieces:** a lock screen with its own keypad, and
-  notifications.
+  notifications (added in a later entry).
 
 ## Can it be flashed onto the phones asked for?
 

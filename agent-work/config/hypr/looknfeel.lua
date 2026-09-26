@@ -51,9 +51,10 @@ hl.config({
 -- parts of each surface -- the home screen between its tiles, the bar strip
 -- the control centre leaves undimmed -- out of the blur. The control centre's
 -- 0.35 scrim is above it, so everything behind the sheet is frosted on
--- purpose. 0.1 sits below every wash these surfaces draw with.
+-- purpose. 0.1 sits below every wash these surfaces draw with. The
+-- notification banners keep the namespace of Omarchy's toasts they replace.
 hl.layer_rule({
-  match = { namespace = "^omarchy-phone-(bar|home|control|keyboard|switcher)$" },
+  match = { namespace = "^(omarchy-phone-(bar|home|control|keyboard|switcher)|omarchy-notifications)$" },
   blur = true,
   ignore_alpha = 0.1,
 })

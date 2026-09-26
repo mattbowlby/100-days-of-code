@@ -186,6 +186,22 @@ Both are newer than the first version of this port, and both broke it silently:
   an overlay (overlay wins over menu in `computePanelEntries`) and hands it the
   library.
 
+- **A built-in can be replaced by a clone of it.** A third-party manifest
+  with `omarchy.clonedFrom: "<built-in id>"` gets the built-in's host
+  capabilities (`stampHostCapabilities` in `PluginRegistry.qml`), and
+  `resolveEnabledId` routes every call for the built-in's id -- the bar's
+  do-not-disturb toggle, `omarchy-shell` IPC -- to the clone while it is
+  enabled. The built-in itself still loads unless it is in shell.json's
+  `disabledPlugins[]`. This is how `omarchy plugin clone` works, and how the
+  notification banners replace Omarchy's toasts: `plugins/phone-notifications`
+  is Omarchy's notifications plugin, copied from the installed Omarchy at
+  install time with only its popup windows swapped for `Banners.qml`. Copied
+  rather than kept in this repo so the service always matches the shell it
+  runs in; the build refuses, and the installer leaves Omarchy's own toasts
+  on, if a later Service.qml is not laid out as expected. Plugins get no
+  other way at the notification list: the first-party service API exposes only
+  `setDoNotDisturb`.
+
 ## Verifying QML
 
 `qmllint` **is** installed — `/usr/lib/qt6/bin/qmllint`, from `qt6-declarative`,
