@@ -205,7 +205,12 @@ Item {
   }
 
   function launch(app) {
-    if (!appLibrary || !app || launching) return
+    if (!appLibrary || !app) return
+    // A tap during the cooldown still ends the search it came from.
+    if (launching) {
+      closeSearch()
+      return
+    }
     launching = true
     launchCooldown.restart()
     appLibrary.launch(app.appId, app.label)
@@ -372,14 +377,23 @@ Item {
   // Swipe down on the home screen, as on iOS: a field at the top, the on-screen
   // keyboard up, and apps matching as you type. The keyboard is another plugin,
   // which this one may not summon through the host -- only the bar may -- but
-  // the shell's IPC answers any process, so it goes that way.
+  // the shell's IPC (omarchy-shell) is not scoped per plugin, so it goes that
+  // way.
   property bool searching: false
   property string query: ""
-  readonly property int searchResultLimit: 8
+  // As many results as fit above the on-screen keyboard, up to eight. The
+  // keyboard's height is phone-keyboard's own sum (four 44px rows and five
+  // gaps); it is another plugin, so it is restated here and must follow it.
+  readonly property int keyboardHeight: Style.space(44) * 4 + Style.spacing.xs * 5
+  readonly property int searchResultLimit: Math.max(1, Math.min(8, Math.floor(
+    (surfaceHeight - keyboardHeight - (barAtBottom ? barSpace : 0)
+      - searchSheet.anchors.topMargin - Style.spacing.lg * 3 - searchSheet.rowHeight)
+    / (searchSheet.rowHeight + Style.spacing.sm))))
   readonly property int searchPullDistance: Style.space(56)
 
-  // The library's own search and ranking, the one upstream's menu uses; an
-  // empty query lists apps in its usual order, as iOS's suggestions do.
+  // The library's own fuzzy search and ranking (AppSearch.js), the same call the
+  // grid makes with an empty query; empty, it lists apps alphabetically, as the
+  // grid does.
   readonly property var results: {
     if (!searching || !appLibrary) return []
     var rows = appLibrary.sortedEntries(query)
@@ -392,11 +406,25 @@ Item {
     return out
   }
 
+  // A window opening over the home screen -- from anywhere, not just a result
+  // tapped here -- ends the search: the keyboard and the field's hold on the
+  // keys belong to what is now in front.
+  Connections {
+    target: ToplevelManager
+    function onActiveToplevelChanged() {
+      if (ToplevelManager.activeToplevel) root.closeSearch()
+    }
+  }
+
+  function summonKeyboard() {
+    Quickshell.execDetached(["omarchy-shell", "shell", "summon", "dev.omarchyphone.keyboard"])
+  }
+
   function openSearch() {
     if (searching) return
     query = ""
     searching = true
-    Quickshell.execDetached(["omarchy-shell", "shell", "summon", "dev.omarchyphone.keyboard"])
+    summonKeyboard()
   }
 
   function closeSearch() {
@@ -416,8 +444,10 @@ Item {
     WlrLayershell.layer: WlrLayer.Bottom
     // Keyboard focus only while searching, so the keys the on-screen keyboard
     // injects land in the search field; the rest of the time the home screen
-    // must never take keys from whatever is focused.
-    WlrLayershell.keyboardFocus: root.searching ? WlrKeyboardFocus.OnDemand : WlrKeyboardFocus.None
+    // must never take keys from whatever is focused. Exclusive, not OnDemand:
+    // Hyprland hands focus over at once only on a switch to Exclusive, and
+    // OnDemand would wait for a tap that the swipe opening search was not.
+    WlrLayershell.keyboardFocus: root.searching ? WlrKeyboardFocus.Exclusive : WlrKeyboardFocus.None
 
     // Ignore rather than reserve: this is the backdrop windows tile over, and
     // it must neither push them aside nor be pushed by the bar. The bar's strip
@@ -607,7 +637,7 @@ Item {
       width: Math.min(parent.width - root.pagePadding * 2, Style.space(480))
       height: searchColumn.implicitHeight + Style.spacing.lg * 2
       radius: root.tileRadius
-      color: Util.alpha(Color.background, 0.6)
+      color: Util.alpha(Color.background, 0.72)
       border.width: Math.max(1, Style.space(1))
       border.color: Util.alpha(Color.foreground, 0.18)
 
@@ -653,6 +683,15 @@ Item {
             font.pixelSize: Style.font.title
             clip: true
             onTextChanged: root.query = text
+
+            // The keyboard can be put away from its own bar toggle; a tap on
+            // the field brings it back, as on iOS.
+            TapHandler {
+              onTapped: {
+                searchInput.forceActiveFocus()
+                root.summonKeyboard()
+              }
+            }
             // Return opens the first match, as a search field's go key does.
             onAccepted: if (root.results.length > 0) root.launch(root.results[0])
 
@@ -661,7 +700,7 @@ Item {
               verticalAlignment: Text.AlignVCenter
               visible: searchInput.text.length === 0
               text: "Search"
-              color: Util.alpha(Color.foreground, 0.45)
+              color: Util.alpha(Color.foreground, 0.6)
               font: searchInput.font
             }
           }

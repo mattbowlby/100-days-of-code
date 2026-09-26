@@ -11,6 +11,10 @@ hour while work is going on. Newest entry first.
 - **Fix: the symbols layer never appeared.** The check read `layer` (every QML
   item's built-in layer-effects object, never `"symbols"`); it now reads
   `keyLayer`.
+- **Search**: swipe down on the home screen for a search field at the top,
+  with the on-screen keyboard up. Up to 8 apps match as you type, each on the
+  same tile as the grid. Tap a result, or press enter for the first one; tap
+  outside the field to close it.
 - **Home indicator**: the iOS pill at the bottom edge, shown over apps only
   (not on the home screen), marking where the swipe home starts.
 - **App switcher**: swipe up from the bottom edge and hold still for a moment;
@@ -127,8 +131,8 @@ phone. See the next entry for the opt-in lock.
 
 - **Nothing has run on a real phone.** The renders come from an offscreen
   harness with Quickshell stubbed out, not from the real shell.
-- **Missing iOS pieces:** a lock screen with its own keypad, notifications,
-  and search.
+- **Missing iOS pieces:** a lock screen with its own keypad, and
+  notifications.
 
 ## Can it be flashed onto the phones asked for?
 

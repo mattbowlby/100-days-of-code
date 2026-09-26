@@ -16,7 +16,7 @@ current Samsung.
 ## The look
 
 iOS's layout -- pages of apps, a dock, page dots, a control centre that drops
-from the top -- with every app on the same frosted rounded-square tile, and
+from the top, a search that drops from the home screen -- with every app on the same frosted rounded-square tile, and
 Omarchy's see-through surfaces over a blur instead of Apple's liquid glass.
 It follows the active Omarchy theme, light or dark. On an unfolded foldable
 (shortest side 600 logical px or more) the home screen opens as two pages side
@@ -32,7 +32,8 @@ plugins/         shell plugins, installed to ~/.config/omarchy/plugins
                      home indicator over apps: home; swipe up and hold: app
                      switcher; down from the top: control centre); hosts
                      Omarchy's own widgets and panels
-  phone-home         home screen and dock, under every window
+  phone-home         home screen and dock, under every window (swipe down
+                     on it: search apps)
   phone-keyboard     on-screen keyboard        (bar toggle)
 bin/             omarchy-phone-* tools
 install/         device bring-up fragments
