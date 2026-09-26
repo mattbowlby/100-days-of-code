@@ -39,7 +39,7 @@ data class AppEntry(
     val adaptive: Boolean,
 )
 
-private class RenderedIcon(val updated: Long, val bitmap: ImageBitmap, val adaptive: Boolean)
+private class RenderedIcon(val updated: Long, val px: Int, val bitmap: ImageBitmap, val adaptive: Boolean)
 
 // Every app with a launcher entry, in every profile, kept current as apps are
 // installed, updated and removed. Icons are rendered off the main thread and
@@ -58,8 +58,8 @@ class AppRepository(private val context: Context) {
     // result is dropped.
     private val generation = AtomicInteger()
 
-    // Rendered icons by entry key, with the package's update time they were
-    // rendered at.
+    // Rendered icons by entry key, with the package's update time and the size
+    // they were rendered at.
     private val icons = ConcurrentHashMap<String, RenderedIcon>()
 
     // An update of many apps at once (the Play Store's auto-update) arrives as
@@ -139,7 +139,7 @@ class AppRepository(private val context: Context) {
     private fun toEntry(info: LauncherActivityInfo, px: Int): AppEntry {
         val key = keyFor(info)
         val updated = versionStamp(info)
-        val icon = icons[key]?.takeIf { it.updated == updated }
+        val icon = icons[key]?.takeIf { it.updated == updated && it.px == px }
             ?: render(info, px, updated).also { icons[key] = it }
         return AppEntry(
             key = key,
@@ -174,7 +174,7 @@ class AppRepository(private val context: Context) {
         // Kept in graphics memory rather than on the app's heap.
         val stored = bitmap.copy(Bitmap.Config.HARDWARE, false) ?: bitmap
         if (stored !== bitmap) bitmap.recycle()
-        return RenderedIcon(updated, stored.asImageBitmap(), adaptive)
+        return RenderedIcon(updated, px, stored.asImageBitmap(), adaptive)
     }
 
     companion object {
