@@ -207,6 +207,95 @@ Item {
     return []
   }
 
+  // --------------------------------------------------------------- gestures
+  //
+  // The screen edges, moved here from the old phone-gestures service. They had
+  // to move: the host now lets a plugin summon, hide or toggle only itself --
+  // unless it is the bar (shell.qml barPluginMayControl) -- so a separate
+  // gesture service could no longer open anything but its own id.
+  //
+  // Bottom edge, swipe up   -> home
+  // Top edge, swipe down    -> control centre
+  readonly property string homeId: "dev.omarchyphone.home"
+
+  // Thin on purpose: the strips sit above application windows and swallow any
+  // touch that lands in them, so every pixel of height is one an app loses.
+  readonly property int edgeSize: Style.space(16)
+  readonly property int triggerDistance: Style.space(40)
+
+  // Home is the empty workspace the home screen shows through (see
+  // phone-home/Home.qml), so going home is going to one. Summoning the home
+  // plugin as well sends its pager back to the first page, as a second press
+  // of an iPhone's home button does. `hyprctl dispatch` no longer takes the old
+  // "workspace empty" form -- its arguments are Lua now -- hence eval (NOTES.md).
+  function goHome() {
+    Quickshell.execDetached(["hyprctl", "eval", "hl.dispatch(hl.dsp.focus({ workspace = \"empty\" }))"])
+    if (shell && typeof shell.summon === "function") shell.summon(homeId, "")
+  }
+
+  component EdgeSwipe: PanelWindow {
+    id: edgeWindow
+
+    // "top" or "bottom"; the swipe runs away from the edge it starts on.
+    required property string edge
+
+    signal triggered()
+
+    anchors {
+      top: edgeWindow.edge === "top"
+      bottom: edgeWindow.edge === "bottom"
+      left: true
+      right: true
+    }
+
+    // A strip on the bar's edge starts where the bar ends, not over it: the
+    // bar's status widgets open Omarchy's panels on a tap, and a gesture
+    // surface above them would eat every one of those taps.
+    // qmllint disable unqualified unresolved-type
+    margins {
+      top: edgeWindow.edge === "top" && root.position !== "bottom" ? root.barSize : 0
+      bottom: edgeWindow.edge === "bottom" && root.position === "bottom" ? root.barSize : 0
+    }
+    // qmllint enable unqualified unresolved-type
+
+    implicitHeight: root.edgeSize
+    color: "transparent"
+
+    WlrLayershell.namespace: "omarchy-phone-edge-" + edgeWindow.edge
+    // Top, not Overlay: the control centre and a lock surface must be able to
+    // sit above a strip rather than have their input eaten by it.
+    WlrLayershell.layer: WlrLayer.Top
+    WlrLayershell.keyboardFocus: WlrKeyboardFocus.None
+    exclusionMode: ExclusionMode.Ignore
+
+    MouseArea {
+      anchors.fill: parent
+
+      // Keep the grab once taken: the finger leaves this strip almost at once,
+      // and the move events have to keep arriving here to be measured.
+      preventStealing: true
+
+      // -1 is "no gesture", distinct from a press that started at y = 0.
+      property real pressY: -1
+
+      onPressed: function(mouse) { pressY = mouse.y }
+
+      onPositionChanged: function(mouse) {
+        if (pressY < 0) return
+        var travelled = edgeWindow.edge === "bottom" ? pressY - mouse.y : mouse.y - pressY
+        if (travelled < root.triggerDistance) return
+
+        // Fire during the drag, not on release: waiting for the lift reads as
+        // the phone being slow rather than deliberate.
+        pressY = -1
+        edgeWindow.triggered()
+      }
+
+      onReleased: pressY = -1
+      onCanceled: pressY = -1
+    }
+  }
+
   SystemClock {
     id: clock
 
@@ -229,6 +318,20 @@ Item {
     }
   }
 
+  Variants {
+    model: Quickshell.screens
+
+    delegate: Component {
+      EdgeSwipe {
+        required property var modelData
+
+        screen: modelData
+        edge: "bottom"
+        onTriggered: root.goHome()
+      }
+    }
+  }
+
   component PhoneBarPanel: PanelWindow {
     id: barWindow
 
@@ -240,7 +343,11 @@ Item {
     }
 
     implicitHeight: root.barSize
-    color: Color.bar.background
+
+    // See-through, as the rest of the phone's shell is: the theme's bar colour
+    // over a Hyprland blur (config/hypr/looknfeel.lua), so the wallpaper and
+    // the home screen show through frosted rather than behind a solid strip.
+    color: Util.alpha(Color.bar.background, 0.5)
     surfaceFormat.opaque: false
 
     // Its own namespace, so a layer rule can target the phone bar without also

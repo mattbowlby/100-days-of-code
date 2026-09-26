@@ -37,7 +37,9 @@ Item {
   readonly property real surfaceHeight: panel.height > 0 ? panel.height : 780
 
   // Where the status bar is, from the host's scalar view of it, so the grid and
-  // the dock keep clear of whichever edge it is on.
+  // the dock keep clear of whichever edge it is on. Anything but "bottom" is
+  // the top, because that is how phone-bar anchors itself: a portrait phone
+  // has no room for a bar down one side.
   readonly property var barState: shell ? shell.bar : null
   readonly property bool barAtBottom: !!barState && barState.position === "bottom"
   readonly property int barSpace: !barState ? Style.bar.sizeHorizontal
@@ -324,13 +326,28 @@ Item {
   // count, and a new count sends a ListView back to its first item.
   property int anchorPage: 0
 
+  // True from a model reset until the page is restored. A reset lands the
+  // pager on index 0 even mid-swipe, while `moving` is still true, and that
+  // must not be taken for the user choosing page one.
+  property bool restoring: false
+
+  // A jump, not a scroll: the user did not ask to watch every page go past.
   function restorePage() {
-    var spread = Math.min(Math.floor(anchorPage / pagesPerSpread), spreadCount - 1)
-    pager.currentIndex = Math.max(0, spread)
+    var spread = Math.max(0, Math.min(Math.floor(anchorPage / pagesPerSpread), spreadCount - 1))
+    var duration = pager.highlightMoveDuration
+    pager.highlightMoveDuration = 0
+    pager.currentIndex = spread
+    pager.highlightMoveDuration = duration
+    restoring = false
   }
 
-  onSpreadCountChanged: Qt.callLater(restorePage)
-  onPagesPerSpreadChanged: Qt.callLater(restorePage)
+  function scheduleRestore() {
+    restoring = true
+    Qt.callLater(restorePage)
+  }
+
+  onSpreadCountChanged: scheduleRestore()
+  onPagesPerSpreadChanged: scheduleRestore()
 
   // Asked for while already home -- a second swipe up -- the pager returns to
   // the first page, as iOS's home button does. currentIndex rather than a
@@ -356,7 +373,7 @@ Item {
 
     // Ignore rather than reserve: this is the backdrop windows tile over, and
     // it must neither push them aside nor be pushed by the bar. The bar's strip
-    // is kept clear by the margins below instead, as phone-appgrid did.
+    // is kept clear by the content's margins below instead.
     exclusionMode: ExclusionMode.Ignore
 
     ListView {
@@ -376,6 +393,11 @@ Item {
       // A beat before a tile shows its press, so a swipe that starts on an icon
       // does not flash it first. Short enough that a tap still feels instant.
       pressDelay: 80
+      // Setting currentIndex -- open(), a restore -- moves the highlight, and
+      // the view follows it. The default is 400px a second, three seconds back
+      // across four pages; a fixed quarter second is a swipe's pace.
+      highlightMoveDuration: 250
+      highlightMoveVelocity: -1
       // Every spread is built and kept: a phone's worth of apps is a few pages,
       // and a spread built mid-swipe is a dropped frame under the thumb.
       cacheBuffer: width * Math.max(1, root.spreadCount - 1)
@@ -383,7 +405,7 @@ Item {
 
       // Only a swipe moves the anchor; a model reset also changes currentIndex,
       // and that must not overwrite the page being restored.
-      onCurrentIndexChanged: if (moving) root.anchorPage = currentIndex * root.pagesPerSpread
+      onCurrentIndexChanged: if (moving && !root.restoring) root.anchorPage = currentIndex * root.pagesPerSpread
 
       delegate: Row {
         id: spread
@@ -435,9 +457,9 @@ Item {
       }
     }
 
-    // Where you are among the pages, drawn only when there is more than one.
-    // Transparent rather than hidden when there is one, so it keeps its height
-    // and the rows do not jump when a second page arrives.
+    // Where you are among the pages, drawn only when there is more than one. It
+    // holds its place either way, so the rows do not jump when a second page
+    // arrives.
     Row {
       id: dots
 
@@ -476,7 +498,7 @@ Item {
       width: Math.min(parent.width - root.pagePadding * 2,
         root.dockSlots * root.tileSize + (root.dockSlots + 1) * inset * 2)
       height: root.tileSize + inset * 2
-      // Concentric with the tiles inside it.
+      // Concentric with the end tiles, which sit `inset` from each edge.
       radius: root.tileRadius + inset
       visible: root.dockApps.length > 0
 
@@ -484,8 +506,8 @@ Item {
       border.width: Math.max(1, Style.space(1))
       border.color: Util.alpha(Color.foreground, 0.14)
 
-      // Fewer apps than slots spread across the whole shelf, as iOS's do,
-      // rather than huddling in the middle of it.
+      // Two or more apps spread across the whole shelf, as iOS's do, rather
+      // than huddling in the middle of it; a single app sits centred.
       Row {
         anchors.centerIn: parent
         spacing: (dock.width - dock.inset * 2 - root.dockApps.length * root.tileSize)
