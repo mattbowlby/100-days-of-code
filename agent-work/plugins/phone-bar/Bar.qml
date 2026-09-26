@@ -83,8 +83,9 @@ Item {
     widgetItems = next
   }
 
-  // Only if the entry is still this item: with a second screen there are two
-  // bars, and one being destroyed must not drop the other's live widget.
+  // Only if the entry is still this item: each screen's status row registers
+  // under the same id and the last one wins, so a row being destroyed must not
+  // drop an entry another row has since taken.
   function unregisterWidgetItem(widgetId, item) {
     var id = String(widgetId || "")
     if (!widgetItems[id] || widgetItems[id] !== item) return
@@ -341,20 +342,21 @@ Item {
 
   // Panels open the upstream panel through summonBarWidget(), which needs the
   // widget loaded in the status row, so a tile shows only while its widget is
-  // -- which is why audio and monitor are in the default row above.
-  // Actions run a command; every one is an existing Omarchy tool.
+  // -- which is why audio and monitor are in the default row above, and why a
+  // row configured in shell.json must list them too for their tiles to show.
+  // Actions run a command; every one is an existing Omarchy tool. There is no
+  // Lock tile: Omarchy's lock asks for a typed password that a phone with no
+  // hardware keyboard cannot enter (config/hypr/bindings.lua, NOTES.md).
   //
   // Glyphs are Nerd Font codepoints on the default family, written as escapes
   // and checked by rendering them (NOTES.md): f1eb wifi, f293 bluetooth, f028
-  // volume, f240 battery, f108 display, f023 lock, f030 camera, f186 moon,
-  // f0f4 cup.
+  // volume, f240 battery, f108 display, f030 camera, f186 moon, f0f4 cup.
   readonly property var controlTiles: [
     { panel: "omarchy.network",   icon: "\uf1eb", label: "Network" },
     { panel: "omarchy.bluetooth", icon: "\uf293", label: "Bluetooth" },
     { panel: "omarchy.audio",     icon: "\uf028", label: "Sound" },
     { panel: "omarchy.power",     icon: "\uf240", label: "Battery" },
     { panel: "omarchy.monitor",   icon: "\uf108", label: "Display" },
-    { command: ["omarchy-system-lock"],                               icon: "\uf023", label: "Lock" },
     { command: ["omarchy-capture-screenshot", "fullscreen", "save"],  icon: "\uf030", label: "Screenshot" },
     { command: ["omarchy-toggle-nightlight"],                         icon: "\uf186", label: "Night Light" },
     { command: ["omarchy-toggle-idle"],                               icon: "\uf0f4", label: "Stay Awake" }
@@ -404,8 +406,9 @@ Item {
       root.pendingTile = null
       if (!tile) return
       if (tile.panel) root.summonBarWidget(tile.panel)
-      // Through a login shell, as upstream's own launches are: the capture tool
-      // needs the session environment a bare exec does not carry.
+      // Through a login shell, as upstream's menu runs its actions: the capture
+      // tool execs omasnap, which needs the login-shell PATH and environment a
+      // bare exec does not carry (Util.execArgv).
       else if (tile.command) Util.execArgv(tile.command)
     }
   }
@@ -441,17 +444,20 @@ Item {
     // whole screen behind the card is dimmed with the theme's background, and
     // being over the blur rule's ignore_alpha, frosted as well: what is behind
     // recedes, as it does under iOS's control centre.
-    // The bar's own strip is left uncovered, as iOS leaves its status bar.
+    // The bar's own strip is left undimmed, as iOS leaves its status bar. The
+    // tap-away area still covers it: this surface spans the whole screen, so a
+    // tap on the strip lands here, not on the bar, and should close the sheet
+    // rather than vanish.
+    MouseArea {
+      anchors.fill: parent
+      onClicked: root.closeControl()
+    }
+
     Rectangle {
       anchors.fill: parent
       anchors.topMargin: root.position === "bottom" ? 0 : root.barSize
       anchors.bottomMargin: root.position === "bottom" ? root.barSize : 0
       color: Util.alpha(Color.background, 0.35)
-
-      MouseArea {
-        anchors.fill: parent
-        onClicked: root.closeControl()
-      }
     }
 
     Rectangle {
@@ -521,9 +527,10 @@ Item {
 
               anchors.top: controlPlate.bottom
               anchors.topMargin: Style.spacing.xs
-              // The gap to each neighbour is borrowed, so "Night Light" fits.
+              // Half the gap to each neighbour is borrowed, so "Night Light"
+              // fits and neighbouring labels still never touch.
               anchors.horizontalCenter: parent.horizontalCenter
-              width: parent.width + sheetWindow.gap
+              width: parent.width + sheetWindow.gap / 2
               text: controlTile.modelData.label
               color: Color.foreground
               font.family: Style.font.family
@@ -701,6 +708,13 @@ Item {
             root.registerWidgetItem(widgetId, item)
           }
 
+          // A Loader outlives its item when it goes inactive (a plugin reload
+          // drops the registry entry), and nothing else would unregister it.
+          property var registeredItem: null
+          onItemChanged: {
+            if (registeredItem && registeredItem !== item) root.unregisterWidgetItem(widgetId, registeredItem)
+            registeredItem = item
+          }
           Component.onDestruction: root.unregisterWidgetItem(widgetId, item)
         }
       }

@@ -125,7 +125,18 @@ The kinds in use upstream: `bar`, `bar-widget`, `service`, `overlay`, `panel`,
 The plugins as built: `dev.omarchyphone.bar` (kind `bar`, and host of the edge
 gestures and control centre), `dev.omarchyphone.home` (kinds `overlay` +
 `menu`, `keepLoaded`), `dev.omarchyphone.keyboard` (`overlay` + `bar-widget`).
-A phone `lock` is still to come.
+A phone `lock` is still to come, and until it exists **the phone is never
+locked**. Omarchy's lock (`plugins/lock`) asks for a typed password, and the
+on-screen keyboard is a layer surface that a session lock covers like any
+other, so a locked phone without a hardware keyboard could not be unlocked.
+Hence: the power button only blanks the panel (`config/hypr/bindings.lua`),
+the control centre has no Lock tile, and the installer pushes Omarchy's idle
+lock and screensaver out to ~23 days (the idle service has no "off"; 0 means
+"at once"). A phone lock plugin with its own PIN pad -- built on
+`WlSessionLock`, which Quickshell exposes -- is what undoes all three. It
+cannot be a bar feature: `barPluginMayControl` refuses authentication
+services. Also missing meanwhile: blanking the panel after idle, which
+upstream only does as part of locking.
 
 ### Two host rules the layout of the plugins follows
 

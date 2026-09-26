@@ -95,6 +95,15 @@ mapfile -t overlay_ids < <(
 
 ids_json=$(printf '%s\n' "${overlay_ids[@]}" | jq -Rc 'select(length>0)' | jq -sc .)
 
+# Omarchy's idle service locks the session after idle.lock seconds (upstream
+# default 300), and its lock asks for a typed password the phone cannot enter:
+# the on-screen keyboard is a layer surface the session lock covers. So on the
+# phone both idle steps are pushed out of reach. The service has no "off" --
+# 0 means "at once" -- so it is the largest delay its millisecond timer holds,
+# about 23 days. This comes out again when the phone has a lock with its own
+# PIN pad (NOTES.md). The screensaver goes too: it launches a desktop window.
+IDLE_NEVER=2000000
+
 # Everything below edits shell.json with jq, and a jq that cannot parse it
 # fails inside `&&` chains where set -e does not reach. Say so up front and stop,
 # before the plan is printed as though it could be carried out.
@@ -116,6 +125,7 @@ if [[ -r $SHELL_CONFIG ]]; then
   for id in "${stale_ids[@]}"; do
     say "drop $id from plugins[] (no plugin in this checkout provides it)"
   done
+  say "push idle.lock and idle.screensaver out to $IDLE_NEVER s (no auto-lock until the phone has a PIN-pad lock)"
 
   if ((APPLY)); then
     mkdir -p "$BACKUP_DIR"
@@ -126,8 +136,9 @@ if [[ -r $SHELL_CONFIG ]]; then
     # so an upgrade does not leave the host chasing a plugin that is gone.
     # Duplicates by id are dropped keeping the first, in order; entries with no
     # id are not ours to judge and pass through untouched.
-    jq --arg bar "$bar_id" --argjson ids "$ids_json" '
+    jq --arg bar "$bar_id" --argjson ids "$ids_json" --argjson never "$IDLE_NEVER" '
       .bar.id = $bar
+      | .idle = ((if (.idle | type) == "object" then .idle else {} end) + {lock: $never, screensaver: $never})
       | .plugins = ((if (.plugins | type) == "array" then .plugins else [] end)
           | map(select(((.id // "") | tostring | startswith("dev.omarchyphone.") | not)
               or ((.id) as $id | $ids + [$bar] | index($id))))

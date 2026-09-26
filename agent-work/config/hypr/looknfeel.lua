@@ -48,9 +48,10 @@ hl.config({
 })
 
 -- Blur behind the phone's own surfaces. ignore_alpha keeps the fully clear
--- parts of each surface -- the home screen between its tiles, the space around
--- the control centre sheet -- out of the blur, so only the frosted pieces are
--- frosted. It sits just under the lowest wash alpha these surfaces draw with.
+-- parts of each surface -- the home screen between its tiles, the bar strip
+-- the control centre leaves undimmed -- out of the blur. The control centre's
+-- 0.35 scrim is above it, so everything behind the sheet is frosted on
+-- purpose. 0.1 sits below every wash these surfaces draw with.
 hl.layer_rule({
   match = { namespace = "^omarchy-phone-(bar|home|control)$" },
   blur = true,
