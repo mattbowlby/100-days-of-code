@@ -52,7 +52,8 @@ list):
 
 - The power button only turns the screen off.
 - There is no Lock tile.
-- The installer switches off Omarchy's 5-minute auto-lock.
+- The installer switches off Omarchy's 5-minute auto-lock, and its
+  lock-on-suspend (a closed flip cover or fold can suspend a phone).
 
 The same problem was in the original port, where the power button locked the
 phone.

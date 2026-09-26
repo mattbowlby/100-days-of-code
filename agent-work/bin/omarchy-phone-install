@@ -98,10 +98,12 @@ ids_json=$(printf '%s\n' "${overlay_ids[@]}" | jq -Rc 'select(length>0)' | jq -s
 # Omarchy's idle service locks the session after idle.lock seconds (upstream
 # default 300), and its lock asks for a typed password the phone cannot enter:
 # the on-screen keyboard is a layer surface the session lock covers. So on the
-# phone both idle steps are pushed out of reach. The service has no "off" --
+# phone both idle steps are pushed out of reach. The service has no "off" of its own --
 # 0 means "at once" -- so it is the largest delay its millisecond timer holds,
 # about 23 days. This comes out again when the phone has a lock with its own
 # PIN pad (NOTES.md). The screensaver goes too: it launches a desktop window.
+# (The stay-awake marker does switch idle off, but it is the control centre's
+# Stay Awake tile, and a tap would undo it; this has no off the user can undo.)
 IDLE_NEVER=2000000
 
 # Everything below edits shell.json with jq, and a jq that cannot parse it
@@ -183,6 +185,14 @@ fi
 
 # --- system ------------------------------------------------------------------
 step "System"
+# Omarchy locks the session on every suspend (omarchy-sleep-lock.service), and
+# a phone suspends more readily than a laptop: many report a flip cover's or a
+# fold's hall sensor as a lid switch, which logind suspends on. A lock the phone
+# cannot unlock (see "Shell config") must not come in that way either. Masked,
+# not disabled, so Omarchy's own upgrade re-enabling its units leaves it off.
+say "mask omarchy-sleep-lock.service (no lock on suspend until the phone lock exists)"
+((APPLY)) && { systemctl --user mask omarchy-sleep-lock.service >/dev/null 2>&1 \
+  || echo "  could not mask omarchy-sleep-lock.service; do it by hand" >&2; }
 say "run install/hardware/power-key.sh (logind long-press -> poweroff)"
 ((APPLY)) && bash "$OMARCHY_PHONE_PATH/install/hardware/power-key.sh"
 

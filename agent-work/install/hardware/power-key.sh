@@ -1,4 +1,4 @@
-# A phone's power button: short press locks and blanks the panel (bound in
+# A phone's power button: short press blanks the panel (bound in
 # config/hypr/bindings.lua), long press forces power off.
 #
 # Omarchy already sets HandlePowerKey=ignore so the compositor can own the short
