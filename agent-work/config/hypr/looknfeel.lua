@@ -53,7 +53,7 @@ hl.config({
 -- 0.35 scrim is above it, so everything behind the sheet is frosted on
 -- purpose. 0.1 sits below every wash these surfaces draw with.
 hl.layer_rule({
-  match = { namespace = "^omarchy-phone-(bar|home|control)$" },
+  match = { namespace = "^omarchy-phone-(bar|home|control|keyboard)$" },
   blur = true,
   ignore_alpha = 0.1,
 })
@@ -64,3 +64,14 @@ hl.layer_rule({
 -- the browser is the app most often open. Loaded after upstream's rules, and a
 -- later matching rule wins, so this is the last word.
 o.window(".*", { opacity = "1 1" })
+
+-- The on-screen keyboard is drawn -- and takes touches -- above a session lock
+-- (2 is "render and interact"; 1 would only draw it). Omarchy's lock asks for
+-- a typed password, the lock surface keeps keyboard focus, and the keys this
+-- keyboard injects go to the focused surface: so this is what lets a phone with
+-- no hardware keyboard unlock. Only this one namespace: anything else above
+-- the lock would be readable and usable by whoever holds the phone.
+hl.layer_rule({
+  match = { namespace = "^omarchy-phone-keyboard$" },
+  above_lock = 2,
+})

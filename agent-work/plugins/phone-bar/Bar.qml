@@ -9,6 +9,7 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import Quickshell
 import Quickshell.Hyprland
+import Quickshell.Io
 import Quickshell.Wayland
 import qs.Commons
 
@@ -344,15 +345,14 @@ Item {
   // widget loaded in the status row, so a tile shows only while its widget is
   // -- which is why audio and monitor are in the default row above, and why a
   // row configured in shell.json must list them too for their tiles to show.
-  // Actions run a command; every one is an existing Omarchy tool. There is no
-  // Lock tile: Omarchy's lock asks for a typed password that a phone with no
-  // hardware keyboard cannot enter (config/hypr/bindings.lua, NOTES.md). Nor a
-  // Stay Awake one: stay-awake only pauses the idle lock and screensaver, and
+  // Actions run a command; every one is an existing Omarchy tool. The Lock
+  // tile is the exception, and opt-in: see "lock" below. There is no Stay
+  // Awake tile: stay-awake only pauses the idle lock and screensaver, and
   // the installer has already pushed both out of reach, so it would do nothing.
   //
   // Glyphs are Nerd Font codepoints on the default family, written as escapes
   // and checked by rendering them (NOTES.md): f1eb wifi, f293 bluetooth, f028
-  // volume, f240 battery, f108 display, f030 camera, f186 moon.
+  // volume, f240 battery, f108 display, f030 camera, f186 moon, f023 lock.
   readonly property var controlTiles: [
     { panel: "omarchy.network",   icon: "\uf1eb", label: "Network" },
     { panel: "omarchy.bluetooth", icon: "\uf293", label: "Bluetooth" },
@@ -360,7 +360,8 @@ Item {
     { panel: "omarchy.power",     icon: "\uf240", label: "Battery" },
     { panel: "omarchy.monitor",   icon: "\uf108", label: "Display" },
     { command: ["omarchy-capture-screenshot", "fullscreen", "save"],  icon: "\uf030", label: "Screenshot" },
-    { command: ["omarchy-toggle-nightlight"],                         icon: "\uf186", label: "Night Light" }
+    { command: ["omarchy-toggle-nightlight"],                         icon: "\uf186", label: "Night Light" },
+    { action: "lock",                                                 icon: "\uf023", label: "Lock" }
   ]
 
   readonly property var visibleControlTiles: {
@@ -372,6 +373,7 @@ Item {
       // would then open a popup anchored to an item nothing is placing.
       var widget = tile.panel ? widgetItems[tile.panel] : null
       if (tile.panel && !(widget && widget.visible)) continue
+      if (tile.action === "lock" && !lockEnabled) continue
       out.push(tile)
     }
     return out
@@ -406,11 +408,67 @@ Item {
       var tile = root.pendingTile
       root.pendingTile = null
       if (!tile) return
-      if (tile.panel) root.summonBarWidget(tile.panel)
+      if (tile.action === "lock") root.lockPhone()
+      else if (tile.panel) root.summonBarWidget(tile.panel)
       // Through a login shell, as upstream's menu runs its actions: the capture
       // tool execs omasnap, which needs the login-shell PATH and environment a
       // bare exec does not carry (Util.execArgv).
       else if (tile.command) Util.execArgv(tile.command)
+    }
+  }
+
+  // ------------------------------------------------------------------- lock
+  //
+  // Omarchy's own lock, with the on-screen keyboard summoned over it. The lock
+  // asks for a typed password and keeps keyboard focus on its surface; the
+  // keyboard is drawn and touchable above a session lock by the above_lock
+  // layer rule in config/hypr/looknfeel.lua, and the keys it injects go to the
+  // focused surface -- the password field.
+  //
+  // Opt-in, by creating the file below, until it has been seen working on a
+  // phone. A lock whose keyboard does not come up is one the phone cannot
+  // leave short of forcing it off (NOTES.md). The power button and the idle
+  // timer stay lock-free for the same reason.
+  readonly property string keyboardId: "dev.omarchyphone.keyboard"
+  readonly property string lockOptInFile:
+    (Quickshell.env("XDG_CONFIG_HOME") || (Quickshell.env("HOME") + "/.config"))
+    + "/omarchy-phone/lock-with-keyboard"
+  property bool lockEnabled: false
+
+  FileView {
+    path: root.lockOptInFile
+    watchChanges: true
+    printErrors: false
+    onLoaded: root.lockEnabled = true
+    onLoadFailed: root.lockEnabled = false
+    onFileChanged: reload()
+  }
+
+  function lockPhone() {
+    Util.execArgv(["omarchy-system-lock"])
+    if (shell && typeof shell.summon === "function") shell.summon(keyboardId, "")
+    lockWatch.restart()
+  }
+
+  // The lock announces nothing when it lifts, so it is asked, and the keyboard
+  // put away once it has. Only while a lock this bar started is up: the first
+  // question comes two seconds in, by which time the lock has engaged.
+  Timer {
+    id: lockWatch
+    interval: 2000
+    repeat: true
+    onTriggered: if (!lockQuery.running) lockQuery.running = true
+  }
+
+  Process {
+    id: lockQuery
+    command: ["omarchy-shell", "lock", "isLocked"]
+    stdout: StdioCollector {
+      onStreamFinished: {
+        if (text.trim() === "true") return
+        lockWatch.stop()
+        if (root.shell && typeof root.shell.hide === "function") root.shell.hide(root.keyboardId)
+      }
     }
   }
 

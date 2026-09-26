@@ -46,7 +46,9 @@ Item {
     ".,?!'+=#%*"
   ]
 
-  readonly property var currentRows: layer === "symbols" ? symbolRows : letterRows
+  // keyLayer, never `layer`: the bare name resolves to QQuickItem.layer, an
+  // object that is never equal to "symbols", and the symbols never showed.
+  readonly property var currentRows: keyLayer === "symbols" ? symbolRows : letterRows
 
   function open(payloadJson) {
     shifted = false
@@ -85,7 +87,11 @@ Item {
 
     visible: root.opened
     anchors { bottom: true; left: true; right: true }
-    color: Color.menu.background
+
+    // The phone's see-through look: a translucent plate of the theme's
+    // background over Hyprland's blur (config/hypr/looknfeel.lua), with keys
+    // drawn as frosted rounded rectangles in the home screen's manner.
+    color: Util.alpha(Color.background, 0.8)
 
     implicitHeight: root.keyHeight * 4 + root.keyGap * 5
 
@@ -156,6 +162,7 @@ Item {
         Key {
           width: bottomRow.usable * 0.15
           height: root.keyHeight
+          functional: true
           label: root.shifted ? "SHIFT" : "shift"
           active: root.keyLayer === "letters" && root.shifted
           enabled: root.keyLayer === "letters"
@@ -165,6 +172,7 @@ Item {
         Key {
           width: bottomRow.usable * 0.15
           height: root.keyHeight
+          functional: true
           label: root.keyLayer === "symbols" ? "abc" : "?123"
           onActivated: root.keyLayer = root.keyLayer === "symbols" ? "letters" : "symbols"
         }
@@ -172,6 +180,7 @@ Item {
         Key {
           width: bottomRow.usable * 0.36
           height: root.keyHeight
+          functional: true
           label: "space"
           onActivated: root.typeText(" ")
         }
@@ -179,6 +188,7 @@ Item {
         Key {
           width: bottomRow.usable * 0.17
           height: root.keyHeight
+          functional: true
           label: "back"
           onActivated: root.typeKey("BackSpace")
         }
@@ -186,6 +196,7 @@ Item {
         Key {
           width: bottomRow.usable * 0.17
           height: root.keyHeight
+          functional: true
           label: "enter"
           onActivated: root.typeKey("Return")
         }
@@ -199,23 +210,29 @@ Item {
     property string label: ""
     property bool active: false
 
+    // Shift, layer, space, back and enter: drawn a step quieter than the
+    // character keys, as iOS draws its function keys.
+    property bool functional: false
+
     signal activated()
 
-    radius: Style.cornerRadius
-    color: key.active || tap.pressed ? Color.menu.selectedBackground : Color.menu.background
+    // The home screen's corner ratio, on a key's height rather than a tile's.
+    radius: Math.round(root.keyHeight * 0.22)
+    color: Util.alpha(Color.foreground,
+      key.active || tap.pressed ? 0.3 : (key.functional ? 0.06 : 0.14))
 
     // Item.enabled cascades and already blocks the tap, but a disabled key that
     // looks identical to a live one just reads as the phone ignoring you.
     opacity: enabled ? 1.0 : 0.4
     border.width: Math.max(1, Style.space(1))
-    border.color: Color.menu.border
+    border.color: Util.alpha(Color.foreground, 0.16)
 
     Text {
       anchors.centerIn: parent
       text: key.label
-      color: key.active ? Color.menu.selectedText : Color.menu.text
+      color: key.active ? Color.accent : Color.foreground
       font.family: Style.font.family
-      font.pixelSize: Style.font.body
+      font.pixelSize: key.functional ? Style.font.bodySmall : Style.font.title
     }
 
     // Fires on press, not on release: a keyboard that waits for the finger to
