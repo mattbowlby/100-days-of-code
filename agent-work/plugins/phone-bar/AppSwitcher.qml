@@ -233,10 +233,17 @@ PanelWindow {
           target: null
           xAxis.enabled: false
           onTranslationChanged: if (active) frame.dy = translation.y
-          onActiveChanged: {
-            if (active) return
-            if (-frame.dy > switcher.cardHeight * 0.3) switcher.closeApp(card.modelData)
-            frame.dy = 0
+
+          // Decided on the grab, not on active: active also goes false when a
+          // touch is cancelled (the compositor taking it back), and a card
+          // pulled up and then cancelled must settle back, not close its app.
+          // The exclusive grab is released only after the lift is delivered,
+          // while dy still holds the last move.
+          onGrabChanged: function(transition, point) {
+            if (transition === PointerDevice.UngrabExclusive
+                && -frame.dy > switcher.cardHeight * 0.3) switcher.closeApp(card.modelData)
+            if (transition === PointerDevice.UngrabExclusive
+                || transition === PointerDevice.CancelGrabExclusive) frame.dy = 0
           }
         }
       }
