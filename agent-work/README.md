@@ -27,10 +27,11 @@ by side once there is more than one page of apps. `previews/` has renders at eac
 ```
 config/hypr/     the mobile session (Lua, not .conf)
 plugins/         shell plugins, installed to ~/.config/omarchy/plugins
-  phone-bar          status bar, screen-edge swipes and the control centre
-                     (swipe up from the bottom, marked by a home indicator
-                     over apps: home; down from the top: control centre);
-                     hosts Omarchy's own widgets and panels
+  phone-bar          status bar, screen-edge swipes, app switcher and the
+                     control centre (swipe up from the bottom, marked by a
+                     home indicator over apps: home; swipe up and hold: app
+                     switcher; down from the top: control centre); hosts
+                     Omarchy's own widgets and panels
   phone-home         home screen and dock, under every window
   phone-keyboard     on-screen keyboard        (bar toggle)
 bin/             omarchy-phone-* tools

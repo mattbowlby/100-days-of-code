@@ -12,6 +12,11 @@ It is a simulation, not a screenshot:
 - **Every surface is laid out from its layer-shell anchors, margins and
   implicit size.** Surfaces are then stacked by layer over the theme's
   wallpaper.
+- **Window stills and effects are stand-ins.** `ScreencopyView` is a grey
+  panel labelled "window", and `MultiEffect` (not in Qt before 6.5) is
+  replaced by a plain `ShaderEffect`. The harness renders with Qt's software
+  backend, which draws no shader effects, so anything behind one -- the app
+  switcher's window stills -- comes out blank.
 - **Blur is imitated.** Any namespace listed in `--blur` gets a Gaussian blur
   of whatever is under it, wherever the surface's alpha is above 0.05. The
   real blur is Hyprland's, set in `config/hypr/looknfeel.lua`.
@@ -41,7 +46,9 @@ OMARCHY_PATH=~/src/omarchy tools/preview/render.py \
   `plugins`.
 - **`--apps`** takes a JSON list of `{id, name, icon}` to use in place of
   Omarchy's web-app icons.
-- **`TOPLEVELS`**, set to any non-empty value in the environment, puts one
-  window on the focused workspace in the Hyprland stub. The bar then renders
-  as it does over an app, with the home indicator, rather than over the home
-  screen. For example: `TOPLEVELS=1 tools/preview/render.py ...`.
+- **`TOPLEVELS`**, set to a number N in the environment, puts N windows in
+  the Hyprland stub (any other non-empty value: one), each on its own
+  workspace and titled Chromium, foot, Files, Messages, Maps, Photos in turn.
+  The first is on the focused workspace, so the bar renders as it does over an
+  app, with the home indicator, and the app switcher has cards. For example:
+  `TOPLEVELS=3 tools/preview/render.py ... --actions 'plugins[0].openSwitcher()'`.

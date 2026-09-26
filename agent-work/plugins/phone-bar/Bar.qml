@@ -224,8 +224,9 @@ Item {
   // unless it is the bar (shell.qml barPluginMayControl) -- so a separate
   // gesture service could no longer open anything but its own id.
   //
-  // Bottom edge, swipe up   -> home
-  // Top edge, swipe down    -> control centre
+  // Bottom edge, swipe up          -> home
+  // Bottom edge, swipe up and hold -> app switcher
+  // Top edge, swipe down           -> control centre
   readonly property string homeId: "dev.omarchyphone.home"
 
   // Thin on purpose: the strips sit above application windows and swallow any
@@ -419,7 +420,10 @@ Item {
       anchors.horizontalCenter: parent.horizontalCenter
       anchors.bottom: parent.bottom
       anchors.bottomMargin: Math.round((parent.height - height) / 2)
-      width: Math.min(Math.round(parent.width * 0.36), Style.space(134))
+      // Stretches while a swipe is waiting to become a hold: the one sign,
+      // before the switcher opens, that pausing will open it.
+      width: Math.min(Math.round(parent.width * 0.36), Style.space(134)) * (swipe.armed ? 1.4 : 1)
+      Behavior on width { NumberAnimation { duration: 120; easing.type: Easing.OutQuad } }
       height: Math.max(3, Style.space(5))
       radius: height / 2
       // Two tones, because it cannot see what it sits on: iOS tints its pill

@@ -13,6 +13,13 @@ hour while work is going on. Newest entry first.
   `keyLayer`.
 - **Home indicator**: the iOS pill at the bottom edge, shown over apps only
   (not on the home screen), marking where the swipe home starts.
+- **App switcher**: swipe up from the bottom edge and hold still for a
+  moment; the home indicator stretches as the cue. Every open app (not
+  scratchpads) is a card in a row, a still of its window under its name,
+  opening on the app you were in. Tap a card to go to that app, flick it up to
+  close it, tap outside the cards to go back. A quick swipe up still goes
+  home, now on the lift, and dragging back down cancels. The window stills
+  are untested: the preview cannot capture windows.
 - **Keystrokes are typed in order, and never appear in a process list.** One
   queue, one wtype at a time, text passed on stdin.
 - **Opt-in Lock tile.**

@@ -49,11 +49,13 @@ PanelWindow {
   readonly property int cardHeight: height > 0 ? Math.round(cardWidth * height / width) : cardWidth
   readonly property int cardRadius: Math.round(Style.space(58) * 0.27)
 
-  // Hyprland addresses are hex, and Quickshell hands them over as bare digits.
-  // Checked before they go into Lua, so nothing else ever can.
+  // Hyprland addresses are hex; Quickshell hands them over as bare digits, and
+  // a leading 0x is tolerated in case it ever does not. Checked before they go
+  // into Lua, so nothing else ever can.
   function selector(toplevel) {
-    var address = toplevel ? String(toplevel.address || "") : ""
-    return /^[0-9a-f]+$/.test(address) ? "address:0x" + address : ""
+    var address = toplevel ? String(toplevel.address || "").replace(/^0x/, "") : ""
+    // "0" is Quickshell's placeholder before Hyprland has reported the address.
+    return /^[0-9a-f]+$/.test(address) && address !== "0" ? "address:0x" + address : ""
   }
 
   function focusApp(toplevel) {
@@ -62,6 +64,24 @@ PanelWindow {
     if (!target) return
     Quickshell.execDetached(["hyprctl", "eval",
       "hl.dispatch(hl.dsp.focus({ window = \"" + target + "\" }))"])
+  }
+
+  // The app's name, as iOS labels its cards, not the window's title -- which
+  // for a browser is the page and for a terminal the working directory. The
+  // title stands in when no desktop entry matches the app id.
+  function appName(toplevel) {
+    var appId = toplevel && toplevel.wayland ? String(toplevel.wayland.appId || "") : ""
+    var entry = appId ? DesktopEntries.heuristicLookup(appId) : null
+    return entry && entry.name ? entry.name : String((toplevel && toplevel.title) || "")
+  }
+
+  // Opens on the app that was in front, as iOS's does, rather than wherever
+  // the row was left last time.
+  onVisibleChanged: {
+    if (!visible) return
+    var index = apps.indexOf(Hyprland.activeToplevel)
+    cards.positionViewAtIndex(Math.max(0, index), ListView.Center)
+    cards.currentIndex = Math.max(0, index)
   }
 
   function closeApp(toplevel) {
@@ -110,6 +130,13 @@ PanelWindow {
     snapMode: ListView.SnapToItem
     model: switcher.apps
 
+    // The row takes presses across its whole band, so a tap between cards or
+    // on a title never reaches the background; it closes the switcher here.
+    // A tap on a card also focuses its app, which closes it too.
+    TapHandler {
+      onTapped: switcher.bar.closeSwitcher()
+    }
+
     delegate: Item {
       id: card
 
@@ -124,7 +151,7 @@ PanelWindow {
 
         anchors.left: parent.left
         anchors.right: parent.right
-        text: card.modelData.title || ""
+        text: switcher.appName(card.modelData)
         color: Color.foreground
         font.family: Style.font.family
         font.pixelSize: Style.font.body
@@ -135,14 +162,18 @@ PanelWindow {
       Rectangle {
         id: frame
 
-        y: title.height + Style.spacing.md + drag.translation.y
+        // How far the card is being dragged up (negative), kept here because
+        // the handler zeroes its own translation before announcing a release.
+        property real dy: 0
+
+        y: title.height + Style.spacing.md + Math.min(0, dy)
         width: switcher.cardWidth
         height: switcher.cardHeight
         radius: switcher.cardRadius
         color: Util.alpha(Color.background, 0.8)
         border.width: Math.max(1, Style.space(1))
         border.color: Util.alpha(Color.foreground, 0.22)
-        opacity: 1 - Math.min(0.6, Math.max(0, -drag.translation.y) / switcher.cardHeight)
+        opacity: 1 - Math.min(0.6, Math.max(0, -dy) / switcher.cardHeight)
 
         // The window's still, with the card's rounded corners: a Rectangle's
         // clip is always square, so the corners are masked instead -- the way
@@ -169,12 +200,12 @@ PanelWindow {
             maskSpreadAtMin: 1.0
           }
 
-          // A still, not a live feed: a row of live captures would redraw
-          // every app on every frame for a screen that is only glanced at.
+          // Captured only while the switcher is up: a still taken once would
+          // be as old as the card, and the switcher lives all session.
           ScreencopyView {
             anchors.fill: parent
             captureSource: card.modelData.wayland
-            live: false
+            live: switcher.visible
           }
         }
 
@@ -183,14 +214,18 @@ PanelWindow {
         }
 
         // Up and away closes the app; not far enough, and it settles back.
+        // No target: the handler would otherwise move the frame itself and
+        // overwrite its y binding; the distance goes through dy instead.
         DragHandler {
           id: drag
 
+          target: null
           xAxis.enabled: false
-          yAxis.maximum: 0
+          onTranslationChanged: if (active) frame.dy = translation.y
           onActiveChanged: {
             if (active) return
-            if (-translation.y > switcher.cardHeight * 0.3) switcher.closeApp(card.modelData)
+            if (-frame.dy > switcher.cardHeight * 0.3) switcher.closeApp(card.modelData)
+            frame.dy = 0
           }
         }
       }

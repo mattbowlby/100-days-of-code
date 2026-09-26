@@ -40,7 +40,8 @@ hl.config({
     mouse_move_enables_dpms = false,
   },
 
-  -- Horizontal touch swipe between workspaces is the phone's app switcher.
+  -- Horizontal touch swipe between workspaces moves between apps; swipe up and
+  -- hold from the bottom edge opens the app switcher (phone-bar).
   --
   -- This is the legacy gestures:: section, and it is deliberate. Hyprland
   -- 0.56.2 enforces `fingers >= 2` on the current hl.gesture() keyword

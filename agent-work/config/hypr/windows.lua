@@ -8,8 +8,8 @@
 -- window past the first would be unreachable by touch. Workspaces are reachable:
 -- gestures:workspace_swipe_touch moves between them with one finger.
 --
--- So each window gets its own workspace, and the horizontal swipe is the app
--- switcher. See NOTES.md.
+-- So each window gets its own workspace, and the horizontal swipe moves between
+-- apps; swipe up and hold opens the app switcher. See NOTES.md.
 
 -- A shape surprise would otherwise fire on every window open, so the complaint
 -- is said once and then the rule just stays quiet.
