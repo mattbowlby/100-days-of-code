@@ -74,6 +74,9 @@ Item {
   property var pendingKeys: []
 
   function typeText(text) {
+    // Never queue nothing: an empty run would leave the reader waiting for a
+    // NUL that is never written, and the queue behind it stuck.
+    if (!text) return
     var queue = pendingKeys.slice()
     var last = queue.length > 0 ? queue[queue.length - 1] : null
     if (last && last.text !== undefined) last.text += text

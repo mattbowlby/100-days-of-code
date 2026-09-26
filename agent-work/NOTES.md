@@ -353,13 +353,18 @@ a shortcuts inhibitor — nothing for text input. So `plugins/phone-keyboard`
 injects keys out of process with **`wtype(1)`**, which implements
 `zwp_virtual_keyboard_v1`:
 
-- `wtype -- TEXT` for characters. The `--` is required, not tidiness: `wtype -`
-  means "read from stdin", so typing a bare hyphen would otherwise hang.
+- Characters go to `wtype -` on **stdin**, never in argv: arguments are
+  readable by every user, and on the lock screen the text is the password. A
+  constant `bash -c` script reads up to a NUL and pipes it on (`wtype -` types
+  at EOF); the text is written to its stdin and never interpolated, so no
+  character on the keyboard -- `;`, `$`, a backtick -- is ever parsed. wtype
+  decodes with the inherited locale, so non-ASCII keys would need a UTF-8
+  `LANG`; every key today is ASCII.
 - `wtype -P KEY -p KEY` for named keys (libxkbcommon identifiers — `BackSpace`,
-  `Return`), and `-M`/`-m` for modifiers.
-- Passed as an argv vector, never a command string. `Util` says why in its own
-  comment: a shell would re-tokenize it, and every character on a keyboard is
-  exactly the input that breaks that.
+  `Return`), and `-M`/`-m` for modifiers. Key names are constants, so argv is
+  fine there.
+- One process at a time, from one queue: detached processes per tap can land
+  out of order.
 
 The surface must carry `WlrKeyboardFocus.None`, or the keys wtype injects land
 back in the keyboard instead of the application.
