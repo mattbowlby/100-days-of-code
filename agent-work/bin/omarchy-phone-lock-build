@@ -157,9 +157,36 @@ done < <(sed -n 's/^id //p' <<<"$contract")
 # The new build is put together beside the old one, compiled, and only then
 # moved in, file by file, manifest last -- so a lock that is up while this runs
 # never loses the files it was loaded from.
+#
+# The move itself is undoable: each entry it replaces or removes is set aside
+# in .old first, and if the build does not reach its manifest, the exit trap
+# takes the new entries out and puts the old ones back.
+stage=""
+probe=""
+old=""
+committed=0
+moved_in=()
+finish() {
+  local name
+  if [[ -n $old && -d $old ]]; then
+    if ((committed)); then
+      rm -rf -- "$old"
+    else
+      for name in "${moved_in[@]}"; do rm -rf -- "${TARGET:?}/$name"; done
+      for name in "$old"/* "$old"/.[!.]*; do
+        [[ -e $name ]] && mv -fT -- "$name" "$TARGET/${name##*/}"
+      done
+      rmdir -- "$old"
+      say "the build did not finish; the previous one is back in place"
+    fi
+  fi
+  [[ -n $stage ]] && rm -rf -- "$stage"
+  [[ -n $probe ]] && rm -rf -- "$probe"
+  return 0
+}
+trap finish EXIT
 stage=$(mktemp -d "$TARGET/.stage.XXXXXX")
 probe=$(mktemp -d)
-trap 'rm -rf "$stage" "$probe"' EXIT
 
 # Every file of upstream's lock but its view and manifest.
 names=()
@@ -168,7 +195,7 @@ for path in "$SOURCE"/* "$SOURCE"/.[!.]*; do
   name=${path##*/}
   case $name in
   LockView.qml | manifest.json) continue ;;
-  manifest.in.json | .generated | .gitignore | .stage.*) fail "upstream's lock has a file named $name; not built" ;;
+  manifest.in.json | .generated | .gitignore | .stage.* | .old.*) fail "upstream's lock has a file named $name; not built" ;;
   esac
   names+=("$name")
   cp -a "$path" "$stage/$name"
@@ -195,15 +222,33 @@ cat >"$probe/shell.qml" <<'QML'
 import QtQuick
 import Quickshell
 
+// Loaded by path, as Omarchy loads its plugins, and waited on if the imports
+// take a moment. Started from a timer: Qt.exit only reaches Quickshell once
+// the config has finished loading, which is after Component.onCompleted.
 Scope {
-  Component.onCompleted: {
-    var service = Qt.createComponent(Qt.resolvedUrl("lock/Service.qml"), Component.PreferSynchronous)
-    if (service.status === Component.Ready) {
-      console.log("omarchy-phone-lock-probe: ok")
-      Qt.exit(0)
-    } else {
-      console.log("omarchy-phone-lock-probe: " + service.errorString())
-      Qt.exit(1)
+  id: probe
+
+  property var service: null
+
+  function report(code, message) {
+    console.log("omarchy-phone-lock-probe: " + message)
+    Qt.exit(code)
+  }
+
+  function check() {
+    if (service.status === Component.Loading) return
+    if (service.status === Component.Ready) report(0, "ok")
+    else report(1, service.errorString())
+  }
+
+  Timer {
+    running: true
+    interval: 0
+    onTriggered: {
+      probe.service = Qt.createComponent("file://" + Quickshell.shellPath("lock/Service.qml"),
+        Component.PreferSynchronous)
+      probe.service.statusChanged.connect(probe.check)
+      probe.check()
     }
   }
 }
@@ -219,21 +264,32 @@ else
 fi
 
 # In: every new file, then away with what the last build had and this one does
-# not, then the list, then the manifest that makes the host take it.
-for name in "${names[@]}"; do
-  if [[ -d $stage/$name ]]; then
-    rm -rf -- "${TARGET:?}/$name"
+# not, then the list, then the manifest that makes the host take it. Whatever
+# is replaced or removed goes to .old first (see finish above).
+old=$(mktemp -d "$TARGET/.old.XXXXXX")
+set_aside() {
+  if [[ -e $TARGET/$1 || -L $TARGET/$1 ]]; then
+    mv -fT -- "$TARGET/$1" "$old/$1"
   fi
-  mv -f -- "$stage/$name" "$TARGET/$name"
+}
+for name in "${names[@]}"; do
+  set_aside "$name"
+  moved_in+=("$name")
+  mv -fT -- "$stage/$name" "$TARGET/$name"
 done
 if [[ -f $LIST ]]; then
   while IFS= read -r name; do
     [[ -n $name && $name != . && $name != .. && $name != */* \
       && $name != LockView.qml && $name != manifest.in.json ]] || continue
-    [[ " ${names[*]} " == *" $name "* ]] || rm -rf -- "${TARGET:?}/$name"
+    [[ " ${names[*]} " == *" $name "* ]] || set_aside "$name"
   done <"$LIST"
 fi
+set_aside .generated
+moved_in+=(.generated)
 printf '%s\n' "${names[@]}" >"$LIST"
-mv -f -- "$stage/manifest.json" "$TARGET/manifest.json"
+set_aside manifest.json
+moved_in+=(manifest.json)
+mv -fT -- "$stage/manifest.json" "$TARGET/manifest.json"
+committed=1
 
 echo "built $(jq -r .id "$TARGET/manifest.json") from $SOURCE"

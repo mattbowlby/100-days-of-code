@@ -152,7 +152,8 @@ view by id. It then has Quickshell itself compile the staged copy -- `qs -p`
 on a throwaway config, offscreen, since Quickshell's modules live inside its
 binary and no other tool can load them -- which catches anything else that
 would stop the lock loading, such as a component Omarchy has renamed. Only
-then are the files moved in, manifest last. A build that fails changes
+then are the files moved in, manifest last, each file they replace set aside
+first and put back if the move fails part-way. A build that fails changes
 nothing; the installer, on a failed build, removes the old one and switches
 Omarchy's own lock back on. The Lock tile needs `omarchy-shell lock status` to
 answer, the plugin to be enabled and `omarchy.lock` to be off (it answers
