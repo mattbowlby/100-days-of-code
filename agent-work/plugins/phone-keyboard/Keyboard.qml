@@ -120,7 +120,10 @@ Item {
       if (secret !== "") write(secret + "\u0000")
       secret = ""
     }
-    onExited: root.pumpKeys()
+    // Driven by running, not exited: a process that fails to start (no wtype
+    // on PATH) never emits exited, and the queue behind it would sit -- with
+    // typed text in memory -- until the next tap. pumpKeys ignores a repeat.
+    onRunningChanged: if (!running) Qt.callLater(root.pumpKeys)
   }
 
   PanelWindow {
