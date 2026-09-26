@@ -139,7 +139,7 @@ nothing else can pose as it. The passcode is the user's password, checked by
 the same PAM stack (`/etc/pam.d/omarchy-lock-password`); a numeric password
 makes it a PIN. pam_faillock still counts failures (Omarchy sets `deny=10
 unlock_time=120`): after ten wrong in a row even the right passcode fails for
-two minutes, with the same "Authentication failed" message. With
+two minutes, with the same "Authentication failed" message (and its count). With
 `~/.config/omarchy-phone/no-phone-lock` present the installer removes the
 phone lock instead of building it, the way back to Omarchy's own.
 
@@ -155,7 +155,8 @@ would stop the lock loading, such as a component Omarchy has renamed. Only
 then are the files moved in, manifest last. A build that fails changes
 nothing; the installer, on a failed build, removes the old one and switches
 Omarchy's own lock back on. The Lock tile needs `omarchy-shell lock status` to
-answer as well as the plugin to be enabled, so a lock service that failed to
+answer, the plugin to be enabled and `omarchy.lock` to be off (it answers
+`lock status` too), so a lock service that failed to
 load never gets a tile that does nothing.
 
 One difference from the built-in: a third-party plugin's `shell` has no
