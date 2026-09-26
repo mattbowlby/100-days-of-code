@@ -20,9 +20,9 @@ Checked in September 2026.
 | Device | Bootloader | Linux kernel port | Can it run this port? |
 |---|---|---|---|
 | OnePlus 6T (the reference device) | Unlockable (`fastboot flashing unlock`) | postmarketOS, community tier | **Yes.** See `BRING-UP.md`. |
-| iPhone SE (2nd gen) | Locked. Apple's boot chain accepts only kernels Apple signed. | None. The only Linux-on-iPhone effort, Project Sandcastle, needs the checkm8 bootrom exploit, covers A7-A11 chips only, and has no usable GPU or modem. The SE 2 uses an A13. | **No.** No technique exists to boot it. |
-| Samsung Galaxy phones from 2023 onward (S23-S25, A14-A56, Z Flip 5-7, Z Fold 5-7) | US models: never unlockable. Every other region: unlockable up to One UI 7. **One UI 8 removed bootloader unlocking in every region.** Its bootloader no longer contains the unlock code, so it cannot be forced either. | None. The newest Samsung phones in pmaports are from 2022 (Galaxy A53, `samsung-a53x`). | **No**, in practice. A non-US unit that has *never* taken One UI 8 could still be unlocked, but it would then need a kernel port that does not exist yet. |
-| Samsung Galaxy Z Fold 8 | Ships with One UI 8 or later, so it cannot be unlocked. | None. | **No.** |
+| iPhone SE (2nd gen) | Locked. Apple's boot chain accepts only kernels Apple signed. | None. The only Linux-on-iPhone effort, Project Sandcastle, needs the checkm8 bootrom exploit (A7-A11 chips at most), in practice supports only A10 devices (iPhone 7/7 Plus, iPod touch 7th gen), and has no usable GPU or modem. The SE 2 uses an A13. | **No.** No technique exists to boot it. |
+| Samsung Galaxy phones from 2023 onward (S23-S25, A14-A56, Z Flip 5-7, Z Fold 5-7) | US models: never unlockable. Every other region: unlockable up to One UI 7. **One UI 8 removed bootloader unlocking in every region**, on any Samsung that takes it -- older models included; the Galaxy A53 got it in October 2025. Its bootloader no longer contains the unlock code, so it cannot be forced either. | None. The newest Samsung phone in pmaports is from 2022 (Galaxy A53, `samsung-a53x`), and that port is archived. | **No**, in practice. A non-US unit that has *never* taken One UI 8 could still be unlocked, but it would then need a kernel port that does not exist yet. |
+| Samsung Galaxy Z Fold 8 | Ships with One UI 9, so it cannot be unlocked. | None. | **No.** |
 
 ## What would change this
 

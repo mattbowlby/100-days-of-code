@@ -95,6 +95,14 @@ mapfile -t overlay_ids < <(
 
 ids_json=$(printf '%s\n' "${overlay_ids[@]}" | jq -Rc 'select(length>0)' | jq -sc .)
 
+# Everything below edits shell.json with jq, and a jq that cannot parse it
+# fails inside `&&` chains where set -e does not reach. Say so up front and stop,
+# before the plan is printed as though it could be carried out.
+if [[ -r $SHELL_CONFIG ]] && ! jq -e 'type == "object"' "$SHELL_CONFIG" >/dev/null 2>&1; then
+  echo "  $SHELL_CONFIG is not a JSON object; fix or remove it, then run this again" >&2
+  exit 1
+fi
+
 if [[ -r $SHELL_CONFIG ]]; then
   say "back up shell.json"
   say "set bar.id = $bar_id"
@@ -102,8 +110,8 @@ if [[ -r $SHELL_CONFIG ]]; then
     [[ -n $id ]] && say "add $id to plugins[]"
   done
   mapfile -t stale_ids < <(
-    jq -r --argjson ids "$ids_json" '(.plugins // [])[] | (.id // "")
-      | select(startswith("dev.omarchyphone.")) | select(. as $id | $ids | index($id) | not)' "$SHELL_CONFIG"
+    jq -r --argjson ids "$ids_json" --arg bar "$bar_id" '(.plugins // [])[] | (.id // "")
+      | select(startswith("dev.omarchyphone.")) | select(. as $id | $ids + [$bar] | index($id) | not)' "$SHELL_CONFIG"
   )
   for id in "${stale_ids[@]}"; do
     say "drop $id from plugins[] (no plugin in this checkout provides it)"
@@ -116,13 +124,21 @@ if [[ -r $SHELL_CONFIG ]]; then
     # Ids of ours that no manifest in this checkout provides any more -- a
     # plugin since replaced, like phone-appgrid by phone-home -- are dropped,
     # so an upgrade does not leave the host chasing a plugin that is gone.
+    # Duplicates by id are dropped keeping the first, in order; entries with no
+    # id are not ours to judge and pass through untouched.
     jq --arg bar "$bar_id" --argjson ids "$ids_json" '
       .bar.id = $bar
-      | .plugins = ((.plugins // [])
-          | map(select(((.id // "") | startswith("dev.omarchyphone.") | not) or ((.id) as $id | $ids | index($id))))
+      | .plugins = ((if (.plugins | type) == "array" then .plugins else [] end)
+          | map(select(((.id // "") | tostring | startswith("dev.omarchyphone.") | not)
+              or ((.id) as $id | $ids + [$bar] | index($id))))
           | . + [$ids[] | {id: .}]
-          | unique_by(.id))
-    ' "$SHELL_CONFIG" >"$tmp" && mv "$tmp" "$SHELL_CONFIG"
+          | reduce .[] as $p ({seen: {}, out: []};
+              if ($p | type) != "object" or ($p.id // null) == null then .out += [$p]
+              elif .seen[$p.id | tostring] then .
+              else .seen[$p.id | tostring] = true | .out += [$p] end)
+          | .out)
+    ' "$SHELL_CONFIG" >"$tmp" || { rm -f "$tmp"; echo "  could not update $SHELL_CONFIG" >&2; exit 1; }
+    mv "$tmp" "$SHELL_CONFIG"
   fi
 else
   # Omarchy's shell writes shell.json on its first run. Creating one here would

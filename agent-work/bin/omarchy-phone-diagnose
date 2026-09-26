@@ -94,7 +94,14 @@ done
 # keeps trying to load, or an id in plugins[] nothing provides.
 for target in "$PLUGINS_DIR"/*; do
   [[ -L $target && ! -e $target ]] || continue
-  no "$(basename "$target"): dangling link in $PLUGINS_DIR (omarchy-phone-plugins-link prunes it)"
+  # The same test omarchy-phone-plugins-link's prune_stale applies.
+  dest=$(readlink "$target")
+  if [[ $dest == "$OMARCHY_PHONE_PATH/plugins"/* ]] \
+    || [[ $(basename "$target") == phone-* && $dest == */plugins/phone-* ]]; then
+    no "$(basename "$target"): dangling link in $PLUGINS_DIR (omarchy-phone-plugins-link prunes it)"
+  else
+    no "$(basename "$target"): dangling link in $PLUGINS_DIR, not this port's; remove it by hand if unwanted"
+  fi
 done
 if [[ -r $SHELL_CONFIG ]]; then
   provided=$(jq -sc '[.[].id]' "$OMARCHY_PHONE_PATH"/plugins/*/manifest.json 2>/dev/null || echo '[]')

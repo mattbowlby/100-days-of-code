@@ -102,7 +102,8 @@ Item {
   // omarchy-phone-install writes a starter file holding exactly those defaults,
   // so the watch below has a file to watch from the first boot and the dock
   // is edited in place rather than conjured from nothing.
-  readonly property string dockFile: Quickshell.env("HOME") + "/.config/omarchy-phone/dock"
+  readonly property string dockFile: (Quickshell.env("XDG_CONFIG_HOME") || (Quickshell.env("HOME") + "/.config"))
+    + "/omarchy-phone/dock"
   property var dockIds: null
   readonly property var defaultDockIds: ["chromium", "foot", "org.gnome.Nautilus", "Google Messages"]
 

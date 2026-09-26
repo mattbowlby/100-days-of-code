@@ -39,17 +39,21 @@ link_all() {
   prune_stale
 }
 
-# A plugin removed from the checkout leaves its link behind, dangling, and the
-# host keeps trying to load whatever that name used to be. Only links into this
-# checkout are considered, as in unlink_all.
+# A plugin removed from the checkout leaves its link behind, dangling. Pruned:
+# dangling links into this checkout, and dangling phone-* links into any
+# .../plugins/phone-* -- which is what an earlier layout of this repo left when
+# its plugins moved (they were at the repo root, now under agent-work/). A live
+# link, or a dangling one that is plainly someone else's, is left alone.
 prune_stale() {
-  local target name
+  local target name dest
   for target in "$PLUGINS_DIR"/*; do
     [[ -L $target && ! -e $target ]] || continue
     name=$(basename "$target")
-    [[ $(readlink "$target") == "$SOURCE_DIR"/* ]] || continue
-    rm -- "$target"
-    echo "removed stale link $name"
+    dest=$(readlink "$target")
+    if [[ $dest == "$SOURCE_DIR"/* ]] || [[ $name == phone-* && $dest == */plugins/phone-* ]]; then
+      rm -- "$target"
+      echo "removed stale link $name"
+    fi
   done
 }
 

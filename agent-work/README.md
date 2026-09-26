@@ -67,7 +67,8 @@ cp "$cfg" "$cfg.bak"                              # keep a way back
 bin/omarchy-phone-plugins-link                    # link into ~/.config/omarchy/plugins
 sleep 10                                          # let the hot-reload settle -- see below
 jq '.bar.id = "dev.omarchyphone.bar"
-    | .plugins = ((.plugins // []) + [{id: "dev.omarchyphone.home"}, {id: "dev.omarchyphone.keyboard"}])' \
+    | .plugins = ((.plugins // []) | map(select((.id // "") | startswith("dev.omarchyphone.") | not))
+        | . + [{id: "dev.omarchyphone.home"}, {id: "dev.omarchyphone.keyboard"}])' \
   "$cfg.bak" > "$cfg"                             # non-bar plugins load only if listed
 omarchy-restart-shell
 
