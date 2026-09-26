@@ -123,7 +123,11 @@ shopt -u nullglob
 if [[ -r $SHELL_CONFIG ]]; then
   builtin_off=$(jq -r '(.disabledPlugins // []) | index("omarchy.notifications") != null' "$SHELL_CONFIG" 2>/dev/null)
   banners_on=$(jq -r '(.plugins // []) | any(.id == "dev.omarchyphone.notifications")' "$SHELL_CONFIG" 2>/dev/null)
-  [[ -f $OMARCHY_PHONE_PATH/plugins/phone-notifications/manifest.json ]] || banners_on=false
+  # Built, and linked from this checkout (the installer's test).
+  [[ -f $OMARCHY_PHONE_PATH/plugins/phone-notifications/manifest.json ]] \
+    && [[ $(readlink -f "$PLUGINS_DIR/phone-notifications") \
+      == "$(readlink -f "$OMARCHY_PHONE_PATH/plugins/phone-notifications")" ]] \
+    || banners_on=false
   case "$banners_on/$builtin_off" in
   true/true) ok "notifications: the phone's banners (omarchy.notifications off)" ;;
   false/false) ok "notifications: Omarchy's own toasts (banners not in use)" ;;

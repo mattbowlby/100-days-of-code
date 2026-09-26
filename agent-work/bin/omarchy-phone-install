@@ -112,8 +112,15 @@ ids_json=$(printf '%s\n' "${overlay_ids[@]}" | jq -Rc 'select(length>0)' | jq -s
 # switched off while they are built (two notification servers cannot both run)
 # and back on while they are not, so the phone is never left without either.
 # This is what `omarchy plugin enable` does for any clone of a built-in.
+# Built is not enough: the link must be ours too. The link script skips a real
+# directory already sitting on the name, and switching the built-in off for
+# that would leave the phone with someone else's notifications, or none.
 banners=false
-[[ -f $OMARCHY_PHONE_PATH/plugins/phone-notifications/manifest.json ]] && banners=true
+if [[ -f $OMARCHY_PHONE_PATH/plugins/phone-notifications/manifest.json ]] \
+  && [[ $(readlink -f "$CONFIG_HOME/omarchy/plugins/phone-notifications") \
+    == "$(readlink -f "$OMARCHY_PHONE_PATH/plugins/phone-notifications")" ]]; then
+  banners=true
+fi
 
 # Omarchy's idle service locks the session after idle.lock seconds (upstream
 # default 300), and its lock asks for a typed password the phone cannot enter:

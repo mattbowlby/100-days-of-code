@@ -24,7 +24,7 @@ TARGET="$OMARCHY_PHONE_PATH/plugins/phone-notifications"
 # Everything the build writes. manifest.json last, and only on success: the
 # link script and the installer take a plugin directory without one as not
 # there, so a failed build leaves Omarchy's own notifications in charge.
-GENERATED=(manifest.json Service.qml NotificationLogic.js components)
+GENERATED=(manifest.json manifest.json.tmp Service.qml NotificationLogic.js components)
 
 clean() {
   local name
@@ -37,10 +37,17 @@ fail() {
   exit 1
 }
 
-if [[ ${1:-} == --clean ]]; then
+case ${1:-} in
+"") ;;
+--clean)
   clean
   exit 0
-fi
+  ;;
+*)
+  echo "usage: omarchy-phone-notifications-build [--clean]" >&2
+  exit 1
+  ;;
+esac
 
 for file in manifest.json Service.qml NotificationLogic.js components/NotificationCard.qml; do
   [[ -e $SOURCE/$file ]] || { echo "omarchy-phone-notifications-build: no $SOURCE/$file" >&2; exit 1; }
@@ -53,7 +60,8 @@ cp -a "$SOURCE/NotificationLogic.js" "$TARGET/"
 cp -a "$SOURCE/components" "$TARGET/"
 
 # Service.qml ends with its popup windows: one Variants block, the last thing
-# in the file, closed by the service's own brace. That block is swapped for the
+# in the file (its own brace at two-space indent), then the service's closing
+# brace. That block is swapped for the
 # banners. Checked rather than assumed -- a later Omarchy that moves things
 # around fails here, loudly, instead of shipping two sets of popups or none.
 # The comment above the block describes upstream's toasts, so it goes too:
@@ -62,12 +70,16 @@ cp -a "$SOURCE/components" "$TARGET/"
 awk '
   function flush() { if (held != "") printf "%s", held; held = "" }
   NF { last = $0 }
+  cut && /^  \}$/ { cut = 0; ended = 1; next }
   cut { if (/WlrLayershell\.namespace: "omarchy-notifications"/) named = 1; next }
+  ended { if (NF && $0 != "}") extra = 1; next }
   /^[[:space:]]*(\/\/.*)?$/ { held = held $0 "\n"; next }
   /^  Variants \{$/ { starts++; cut = 1; held = ""; next }
   { flush(); print }
   END {
-    if (starts != 1 || !named || last != "}") exit 1
+    # Nothing but the closing brace of the service may follow the block: anything
+    # else would be dropped with it.
+    if (starts != 1 || !named || !ended || extra || last != "}") exit 1
     print ""
     print "  // The popups: iOS-style banners (Banners.qml), swapped in for the"
     print "  // desktop toasts by bin/omarchy-phone-notifications-build."
