@@ -1,8 +1,9 @@
 pragma Singleton
 import QtQuick
 import Quickshell
-// TOPLEVELS set in the environment puts that many windows (default 1) on the
-// focused workspace. One monitor, whose active workspace is the focused one.
+// TOPLEVELS set in the environment puts that many windows (default 1) in, each
+// on its own workspace; the first is on the focused one. One monitor, whose
+// active workspace is the focused one.
 QtObject {
   id: hypr
   readonly property int count: Quickshell.env("TOPLEVELS") ? (parseInt(Quickshell.env("TOPLEVELS")) || 1) : 0

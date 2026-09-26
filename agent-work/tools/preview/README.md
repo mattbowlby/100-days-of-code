@@ -13,7 +13,7 @@ It is a simulation, not a screenshot:
   implicit size.** Surfaces are then stacked by layer over the theme's
   wallpaper.
 - **Window stills and effects are stand-ins.** `ScreencopyView` is a grey
-  panel labelled "window", and `MultiEffect` (not in Qt before 6.5) is
+  panel labelled "window" (hidden in the switcher by the effect below), and `MultiEffect` (not in Qt before 6.5) is
   replaced by a plain `ShaderEffect`. The harness renders with Qt's software
   backend, which draws no shader effects, so anything behind one -- the app
   switcher's window stills -- comes out blank.
@@ -46,8 +46,8 @@ OMARCHY_PATH=~/src/omarchy tools/preview/render.py \
   `plugins`.
 - **`--apps`** takes a JSON list of `{id, name, icon}` to use in place of
   Omarchy's web-app icons.
-- **`TOPLEVELS`**, set to a number N in the environment, puts N windows in
-  the Hyprland stub (any other non-empty value: one), each on its own
+- **`TOPLEVELS`**, set to a number N ≥ 1 in the environment, puts N windows in
+  the Hyprland stub (0 or any non-number: one), each on its own
   workspace and titled Chromium, foot, Files, Messages, Maps, Photos in turn.
   The first is on the focused workspace, so the bar renders as it does over an
   app, with the home indicator, and the app switcher has cards. For example:

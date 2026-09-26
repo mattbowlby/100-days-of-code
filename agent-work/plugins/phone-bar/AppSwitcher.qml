@@ -10,8 +10,8 @@ import Quickshell.Wayland
 import qs.Commons
 
 // The app switcher: swipe up from the bottom edge and hold. Every open app as
-// a card -- a still of its window under its title -- in a row to swipe
-// through. Tap a card to go to that app; flick it up to close it.
+// a card -- a still of its window under its name -- in a row to swipe
+// through. Tap a card to go to that app; drag it up to close it.
 //
 // One window per workspace (NOTES.md) makes an app and a window the same
 // thing here, and going to one is focusing its window, which takes Hyprland to
