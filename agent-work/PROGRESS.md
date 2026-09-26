@@ -3,6 +3,18 @@
 Pushed to `agent-work/` on branch `claude/nifty-hamilton-ezxf50` at least once an
 hour while work is going on. Newest entry first.
 
+## 2026-09-26 (late night): brightness and volume sliders
+
+- **The control centre has iOS's two sliders** under its tiles: screen
+  brightness and volume. Drag along one, or tap a point on it; the fill and
+  the icon follow your finger.
+- They move the same things the phone's keys would: the screen's backlight,
+  and the speaker or headphones you are listening on. Turning the volume up
+  unmutes. Brightness stops at 5% so the screen never goes fully dark.
+- Each reads its level when the control centre opens, and stays hidden if it
+  cannot (no backlight to control, no sound device).
+- Preview: `previews/13-control-centre-sliders.png`. Not yet tried on a phone.
+
 ## 2026-09-26 (night): the phone's own lock screen
 
 - **An iOS-style lock screen.** It opens on the time and date over your

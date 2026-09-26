@@ -502,6 +502,7 @@ Item {
     // One sheet at a time: a panel the sheet opened earlier closes first.
     if (activePopout) requestPopout(null)
     checkLock()
+    readLevels()
     controlOpen = true
   }
 
@@ -534,6 +535,151 @@ Item {
       // tool execs omasnap, which needs the login-shell PATH and environment a
       // bare exec does not carry (Util.execArgv).
       else if (tile.command) Util.execArgv(tile.command)
+    }
+  }
+
+  // ----------------------------------------------------------------- levels
+  //
+  // The control centre's brightness and volume, through the same commands
+  // Omarchy's keys use: omarchy-brightness-display, and pactl on the sink
+  // omarchy-audio-output-sink resolves (past any DSP sink, where loudness
+  // really lives). Not Quickshell's PipeWire service, which upstream's own
+  // audio panel handles with great care to keep from crashing it. Read each
+  // time the control centre opens; -1 until read, and a slider stays hidden
+  // until its level is known.
+  property real brightnessLevel: -1
+  property real volumeLevel: -1
+
+  function readLevels() {
+    if (!brightnessRead.running) brightnessRead.running = true
+    if (!volumeRead.running) volumeRead.running = true
+  }
+
+  function levelFrom(text) {
+    var n = parseInt(String(text).trim(), 10)
+    return isNaN(n) ? -1 : Math.max(0, Math.min(1, n / 100))
+  }
+
+  Process {
+    id: brightnessRead
+    command: ["omarchy-brightness-display", "--no-osd"]
+    stdout: StdioCollector { onStreamFinished: root.brightnessLevel = root.levelFrom(text) }
+  }
+
+  Process {
+    id: volumeRead
+    command: ["sh", "-c", "s=$(omarchy-audio-output-sink) && pactl get-sink-volume \"$s\" | grep -o '[0-9]*%' | head -n 1 | tr -d %"]
+    stdout: StdioCollector { onStreamFinished: root.volumeLevel = root.levelFrom(text) }
+  }
+
+  // A drag sends a level per move; each is applied in turn, and only the
+  // latest waiting one, so a slow command never builds a queue behind it.
+  property real pendingBrightness: -1
+  property real pendingVolume: -1
+
+  function setBrightness(level) {
+    brightnessLevel = level
+    pendingBrightness = level
+    if (!brightnessSet.running) applyBrightness()
+  }
+
+  function applyBrightness() {
+    if (pendingBrightness < 0) return
+    // Never all the way down: a black panel is a phone that looks dead.
+    var percent = Math.max(5, Math.round(pendingBrightness * 100))
+    pendingBrightness = -1
+    brightnessSet.command = ["omarchy-brightness-display", "--no-osd", percent + "%"]
+    brightnessSet.running = true
+  }
+
+  Process {
+    id: brightnessSet
+    onRunningChanged: if (!running) Qt.callLater(root.applyBrightness)
+  }
+
+  function setVolume(level) {
+    volumeLevel = level
+    pendingVolume = level
+    if (!volumeSet.running) applyVolume()
+  }
+
+  function applyVolume() {
+    if (pendingVolume < 0) return
+    var percent = Math.round(pendingVolume * 100)
+    pendingVolume = -1
+    // The level as an argument, not spliced into the script. Turning it up
+    // unmutes, as on iOS.
+    volumeSet.command = ["sh", "-c",
+      "s=$(omarchy-audio-output-sink) && pactl set-sink-volume \"$s\" \"$1%\" "
+        + "&& { [ \"$1\" -eq 0 ] || pactl set-sink-mute \"$s\" 0; }",
+      "sh", String(percent)]
+    volumeSet.running = true
+  }
+
+  Process {
+    id: volumeSet
+    onRunningChanged: if (!running) Qt.callLater(root.applyVolume)
+  }
+
+  // A level from 0 to 1 on the tiles' frosted plate, filled from the start in
+  // the theme's foreground, its icon at the start. Drag along it, or tap a
+  // point on it.
+  component LevelSlider: Rectangle {
+    id: slider
+
+    property string icon: ""
+    property real value: 0
+    signal moved(real level)
+
+    // Under a finger it shows the finger, not the last level read back.
+    property real dragLevel: 0
+    readonly property real shown: dragArea.pressed ? dragLevel : value
+
+    color: Util.alpha(Color.background, 0.32)
+    border.width: Math.max(1, Style.space(1))
+    border.color: Util.alpha(Color.foreground, 0.22)
+
+    Rectangle {
+      anchors.fill: parent
+      radius: parent.radius
+      color: Util.alpha(Color.foreground, 0.08)
+    }
+
+    Rectangle {
+      id: fill
+
+      height: parent.height
+      // Never narrower than its own rounded ends, so a low level still reads
+      // as a level rather than a sliver.
+      width: slider.shown > 0 ? Math.max(slider.radius * 2, Math.round(slider.width * slider.shown)) : 0
+      radius: slider.radius
+      color: Util.alpha(Color.foreground, 0.85)
+    }
+
+    Text {
+      id: sliderIcon
+
+      x: Math.round((slider.height - width) / 2)
+      anchors.verticalCenter: parent.verticalCenter
+      text: slider.icon
+      // Dark on the fill, light off it.
+      color: fill.width > x + width / 2 ? Color.background : Color.foreground
+      font.family: Style.font.family
+      font.pixelSize: Math.round(slider.height * 0.45)
+    }
+
+    MouseArea {
+      id: dragArea
+
+      anchors.fill: parent
+      preventStealing: true
+
+      function levelAt(x) {
+        return Math.max(0, Math.min(1, x / Math.max(1, width)))
+      }
+
+      onPressed: function(mouse) { slider.dragLevel = levelAt(mouse.x); slider.moved(slider.dragLevel) }
+      onPositionChanged: function(mouse) { slider.dragLevel = levelAt(mouse.x); slider.moved(slider.dragLevel) }
     }
   }
 
@@ -605,6 +751,8 @@ Item {
     readonly property int gap: Style.spacing.lg
     readonly property int tileSize: Math.max(0, Math.min(Style.space(64),
       Math.floor((Math.min(width - gap * 2, Style.space(420)) - pad * 2 - gap * 3) / 4)))
+    readonly property int rowWidth: tileSize * 4 + gap * 3
+    readonly property int sliderHeight: Math.round(tileSize * 0.62)
 
     visible: root.controlOpen
     anchors { top: true; bottom: true; left: true; right: true }
@@ -643,8 +791,8 @@ Item {
       anchors.horizontalCenter: parent.horizontalCenter
       anchors.top: parent.top
       anchors.topMargin: (root.position === "bottom" ? 0 : root.barSize) + sheetWindow.gap
-      width: tileGrid.width + sheetWindow.pad * 2
-      height: tileGrid.height + sheetWindow.pad * 2
+      width: cardContent.width + sheetWindow.pad * 2
+      height: cardContent.height + sheetWindow.pad * 2
       radius: Math.round(sheetWindow.tileSize * 0.27) + sheetWindow.pad / 2
       color: Util.alpha(Color.background, 0.45)
       border.width: Math.max(1, Style.space(1))
@@ -653,10 +801,15 @@ Item {
       // Taps on the card's own background are not taps away.
       MouseArea { anchors.fill: parent }
 
+      Column {
+        id: cardContent
+
+        anchors.centerIn: parent
+        spacing: sheetWindow.gap
+
       Grid {
         id: tileGrid
 
-        anchors.centerIn: parent
         columns: 4
         columnSpacing: sheetWindow.gap
         rowSpacing: sheetWindow.gap
@@ -723,6 +876,29 @@ Item {
             }
           }
         }
+      }
+
+      // Brightness and volume, iOS's two sliders, as wide as a full row of
+      // tiles. Each shows only once its level has been read.
+      LevelSlider {
+        width: sheetWindow.rowWidth
+        height: sheetWindow.sliderHeight
+        radius: Math.round(sheetWindow.tileSize * 0.27)
+        visible: root.brightnessLevel >= 0
+        icon: "\uf185"
+        value: root.brightnessLevel
+        onMoved: function(level) { root.setBrightness(level) }
+      }
+
+      LevelSlider {
+        width: sheetWindow.rowWidth
+        height: sheetWindow.sliderHeight
+        radius: Math.round(sheetWindow.tileSize * 0.27)
+        visible: root.volumeLevel >= 0
+        icon: root.volumeLevel === 0 ? "\uf026" : "\uf028"
+        value: root.volumeLevel
+        onMoved: function(level) { root.setVolume(level) }
+      }
       }
     }
   }
