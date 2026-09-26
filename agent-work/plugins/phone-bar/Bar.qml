@@ -233,6 +233,24 @@ Item {
   readonly property int edgeSize: Style.space(16)
   readonly property int triggerDistance: Style.space(40)
 
+  // How far a finger may drift and still be holding still.
+  readonly property int holdTolerance: Style.space(6)
+
+  // ---------------------------------------------------------- app switcher
+  //
+  // Swipe up and hold. AppSwitcher.qml draws it; the bar only opens and closes
+  // it, and hides the edge strips while it is up, as for the control centre.
+  property bool switcherOpen: false
+
+  function openSwitcher() {
+    closeControl()
+    switcherOpen = true
+  }
+
+  function closeSwitcher() {
+    switcherOpen = false
+  }
+
   // Home is the empty workspace the home screen shows through (see
   // phone-home/Home.qml), so going home is going to one. `hyprctl dispatch` no
   // longer takes the old "workspace empty" form -- its arguments are Lua now --
@@ -270,6 +288,9 @@ Item {
     required property string edge
 
     signal triggered()
+    // Bottom edge only: the swipe went far enough and then stopped under the
+    // finger instead of lifting -- iOS's swipe-and-hold for the app switcher.
+    signal held()
 
     anchors {
       top: edgeWindow.edge === "top"
@@ -293,7 +314,7 @@ Item {
 
     // Out of the way while the control centre is up: it is on the same layer,
     // and a strip over its card would eat taps meant for the tiles.
-    visible: !root.controlOpen
+    visible: !root.controlOpen && !root.switcherOpen
 
     WlrLayershell.namespace: "omarchy-phone-edge-" + edgeWindow.edge
     // Overlay, not Top. Hyprland discards touches on Top-layer surfaces while a
@@ -305,6 +326,8 @@ Item {
     exclusionMode: ExclusionMode.Ignore
 
     MouseArea {
+      id: swipe
+
       anchors.fill: parent
 
       // The compositor keeps sending a touch's moves to the surface it went
@@ -318,19 +341,56 @@ Item {
 
       onPressed: function(mouse) { pressY = mouse.y }
 
+      // Bottom edge: far enough, and now waiting to see whether the finger
+      // lifts (home) or stops (switcher). lastY is where it last moved to.
+      property bool armed: false
+      property real lastY: 0
+
+      function reset() {
+        pressY = -1
+        armed = false
+        holdTimer.stop()
+      }
+
       onPositionChanged: function(mouse) {
         if (pressY < 0) return
         var travelled = edgeWindow.edge === "bottom" ? pressY - mouse.y : mouse.y - pressY
         if (travelled < root.triggerDistance) return
 
-        // Fire during the drag, not on release: waiting for the lift reads as
-        // the phone being slow rather than deliberate.
-        pressY = -1
+        if (edgeWindow.edge === "bottom") {
+          // Still moving restarts the wait; only a pause counts as a hold.
+          // A few pixels of tremor under a resting thumb are not movement.
+          if (!armed || Math.abs(mouse.y - lastY) > root.holdTolerance) {
+            armed = true
+            lastY = mouse.y
+            holdTimer.restart()
+          }
+          return
+        }
+
+        // The top edge fires during the drag, not on release: waiting for the
+        // lift reads as the phone being slow rather than deliberate.
+        reset()
         edgeWindow.triggered()
       }
 
-      onReleased: pressY = -1
-      onCanceled: pressY = -1
+      // Home goes on the lift, as iOS's does: until then the swipe might yet
+      // become a hold.
+      onReleased: {
+        var wasArmed = armed && holdTimer.running
+        reset()
+        if (wasArmed) edgeWindow.triggered()
+      }
+      onCanceled: reset()
+
+      Timer {
+        id: holdTimer
+        interval: 250
+        onTriggered: {
+          swipe.reset()
+          edgeWindow.held()
+        }
+      }
     }
 
     // This strip's own screen's workspace: with an external display attached,
@@ -421,6 +481,7 @@ Item {
   }
 
   function openControl() {
+    closeSwitcher()
     // One sheet at a time: a panel the sheet opened earlier closes first.
     if (activePopout) requestPopout(null)
     controlOpen = true
@@ -699,6 +760,7 @@ Item {
         screen: modelData
         edge: "bottom"
         onTriggered: root.goHome()
+        onHeld: root.openSwitcher()
       }
     }
   }
@@ -713,6 +775,19 @@ Item {
         screen: modelData
         edge: "top"
         onTriggered: root.openControl()
+      }
+    }
+  }
+
+  Variants {
+    model: Quickshell.screens
+
+    delegate: Component {
+      AppSwitcher {
+        required property var modelData
+
+        screen: modelData
+        bar: root
       }
     }
   }

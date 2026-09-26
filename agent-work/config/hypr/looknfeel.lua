@@ -53,7 +53,7 @@ hl.config({
 -- 0.35 scrim is above it, so everything behind the sheet is frosted on
 -- purpose. 0.1 sits below every wash these surfaces draw with.
 hl.layer_rule({
-  match = { namespace = "^omarchy-phone-(bar|home|control|keyboard)$" },
+  match = { namespace = "^omarchy-phone-(bar|home|control|keyboard|switcher)$" },
   blur = true,
   ignore_alpha = 0.1,
 })
