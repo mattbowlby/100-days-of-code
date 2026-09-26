@@ -67,10 +67,10 @@ have been unreachable by touch. Workspaces *are* reachable with one finger via
 `workspace_swipe_touch`, so workspaces are where windows go.
 
 Consequences to hold onto while building the shell: the horizontal swipe moves
-between apps (swipe up and hold opens the app switcher), the home screen is whatever an empty workspace shows (it sits
-on the Bottom layer under every window) so launching from it opens apps onto
-an empty workspace, and "two windows side by side" is not a state this port
-has.
+between apps (swipe up and hold opens the app switcher), the home screen is
+whatever an empty workspace shows (it sits on the Bottom layer under every
+window) so launching from it opens apps onto an empty workspace, and "two
+windows side by side" is not a state this port has.
 
 ## Also verified
 
