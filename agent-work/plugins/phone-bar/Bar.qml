@@ -543,7 +543,10 @@ Item {
   // so the phone unlocks by touch. The tile shows only while that lock is the
   // one in use -- Omarchy's own asks for a typed password with nothing on
   // screen to type it on -- which the shell is asked each time the control
-  // centre opens. The power button and the idle timer stay lock-free until the
+  // centre opens: phone-lock enabled, and a lock service answering with a PAM
+  // stack to check passcodes against. Enabled alone is only "listed in
+  // shell.json"; a service that failed to load answers nothing, and a tile
+  // that then did nothing would leave the phone unlocked while looking locked. The power button and the idle timer stay lock-free until the
   // phone lock has been seen working on a phone (PROGRESS.md).
   readonly property string phoneLockId: "dev.omarchyphone.lock"
   property bool lockEnabled: false
@@ -560,14 +563,19 @@ Item {
 
   Process {
     id: lockCheck
-    command: ["omarchy-shell", "shell", "listPlugins"]
+    // Two answers, one per line: the plugin list, then the lock's status.
+    command: ["sh", "-c", "omarchy-shell shell listPlugins | tr -d '\\n'; echo; omarchy-shell lock status | tr -d '\\n'"]
     stdout: StdioCollector {
       onStreamFinished: {
         var inUse = false
         try {
-          var plugins = JSON.parse(text)
+          var lines = text.split("\n")
+          var plugins = JSON.parse(lines[0])
+          var enabled = false
           for (var i = 0; i < plugins.length; i++)
-            if (plugins[i].id === root.phoneLockId && plugins[i].enabled === true) inUse = true
+            if (plugins[i].id === root.phoneLockId && plugins[i].enabled === true) enabled = true
+          var status = JSON.parse(lines[1])
+          inUse = enabled && status.passwordPam === true
         } catch (e) {
           // No answer is not an answer of yes: the tile stays away.
         }

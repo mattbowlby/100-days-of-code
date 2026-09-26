@@ -73,6 +73,9 @@ done
 
 # --- stand-ins for Omarchy's own ----------------------------------------------
 step "Notification banners and lock screen"
+# The way back to Omarchy's own lock, should the phone's fail on a device: with
+# this file present the phone lock is removed rather than built (PROGRESS.md).
+NO_PHONE_LOCK="$CONFIG_HOME/omarchy-phone/no-phone-lock"
 # Each is built from the matching plugin of the Omarchy installed here, so it
 # matches the shell that runs it; see the scripts. Before linking, which skips a
 # plugin directory without a manifest -- and a failed build writes none, so
@@ -80,11 +83,25 @@ step "Notification banners and lock screen"
 if ((APPLY)); then
   OMARCHY_PATH="${OMARCHY_PATH:-/usr/share/omarchy}" "$OMARCHY_PHONE_PATH/bin/omarchy-phone-notifications-build" \
     || echo "  banners not built; Omarchy's own notifications stay on" >&2
-  OMARCHY_PATH="${OMARCHY_PATH:-/usr/share/omarchy}" "$OMARCHY_PHONE_PATH/bin/omarchy-phone-lock-build" \
-    || echo "  phone lock screen not built; Omarchy's own lock stays on" >&2
+  if [[ -e $NO_PHONE_LOCK ]]; then
+    "$OMARCHY_PHONE_PATH/bin/omarchy-phone-lock-build" --clean >/dev/null 2>&1 || true
+    echo "  phone lock screen left out (${NO_PHONE_LOCK#"$HOME"/} exists); Omarchy's own lock stays on"
+  else
+    # A failed build leaves the previous one in place; here it goes, so that
+    # "Shell config" switches Omarchy's own lock back on rather than keep the
+    # phone on a build that no longer matches this Omarchy.
+    if ! OMARCHY_PATH="${OMARCHY_PATH:-/usr/share/omarchy}" "$OMARCHY_PHONE_PATH/bin/omarchy-phone-lock-build"; then
+      "$OMARCHY_PHONE_PATH/bin/omarchy-phone-lock-build" --clean >/dev/null 2>&1 || true
+      echo "  phone lock screen not built; Omarchy's own lock stays on" >&2
+    fi
+  fi
 else
   say "build phone-notifications from Omarchy's notifications plugin"
-  say "build phone-lock from Omarchy's lock plugin"
+  if [[ -e $NO_PHONE_LOCK ]]; then
+    say "leave the phone lock screen out (${NO_PHONE_LOCK#"$HOME"/} exists)"
+  else
+    say "build phone-lock from Omarchy's lock plugin"
+  fi
 fi
 
 # --- shell plugins -----------------------------------------------------------
@@ -126,8 +143,12 @@ in_use() {
 }
 replaced=()
 kept=()
-for pair in phone-notifications:omarchy.notifications phone-lock:omarchy.lock; do
-  if in_use "${pair%%:*}"; then replaced+=("${pair#*:}"); else kept+=("${pair#*:}"); fi
+declare -A stand_in=()
+for pair in phone-notifications:omarchy.notifications:dev.omarchyphone.notifications \
+  phone-lock:omarchy.lock:dev.omarchyphone.lock; do
+  IFS=: read -r dir builtin ours <<<"$pair"
+  stand_in[$builtin]="$ours"
+  if in_use "$dir"; then replaced+=("$builtin"); else kept+=("$builtin"); fi
 done
 replaced_json=$(printf '%s\n' "${replaced[@]}" | jq -Rc 'select(length>0)' | jq -sc .)
 kept_json=$(printf '%s\n' "${kept[@]}" | jq -Rc 'select(length>0)' | jq -sc .)
@@ -166,14 +187,19 @@ if [[ -r $SHELL_CONFIG ]]; then
     say "drop $id from plugins[] (no plugin in this checkout provides it)"
   done
   say "push idle.lock and idle.screensaver out to $IDLE_NEVER s (no auto-lock until the phone lock screen is proven on a phone)"
-  for id in "${replaced[@]}"; do
-    say "switch off $id (the phone's own replaces it)"
-  done
-  for id in "${kept[@]}"; do
+  # A dry run has built nothing, so what it would do depends on how the
+  # builds go; --apply has built, linked and knows.
+  for id in "${replaced[@]}" "${kept[@]}"; do
     if ((APPLY)); then
-      say "keep $id on (the phone's replacement is not built, or not linked from this checkout)"
+      if [[ " ${replaced[*]} " == *" $id "* ]]; then
+        say "switch off $id (${stand_in[$id]} replaces it)"
+      else
+        say "keep $id on (${stand_in[$id]} is not built, or not linked from this checkout)"
+      fi
+    elif [[ $id == omarchy.lock && -e $NO_PHONE_LOCK ]]; then
+      say "keep $id on (the phone lock screen is left out)"
     else
-      say "switch off $id if the phone's replacement builds, else keep it on"
+      say "add ${stand_in[$id]} to plugins[] and switch off $id if it builds and links, else keep $id on"
     fi
   done
 
@@ -240,10 +266,10 @@ fi
 step "System"
 # Omarchy locks the session on every suspend (omarchy-sleep-lock.service), and
 # a phone suspends more readily than a laptop: many report a flip cover's or a
-# fold's hall sensor as a lid switch, which logind suspends on. A lock the phone
-# cannot unlock (see "Shell config") must not come in that way either. Masked,
+# fold's hall sensor as a lid switch, which logind suspends on. A lock not yet
+# proven on the phone (see "Shell config") must not come in that way either. Masked,
 # not disabled, so Omarchy's own upgrade re-enabling its units leaves it off.
-say "mask omarchy-sleep-lock.service (no lock on suspend until the phone lock exists)"
+say "mask omarchy-sleep-lock.service (no lock on suspend until the phone lock screen is proven on a phone)"
 ((APPLY)) && { systemctl --user mask omarchy-sleep-lock.service >/dev/null 2>&1 \
   || echo "  could not mask omarchy-sleep-lock.service; do it by hand" >&2; }
 say "run install/hardware/power-key.sh (logind long-press -> poweroff)"

@@ -67,10 +67,9 @@ Item {
   }
 
   // Every key goes through one queue and one wtype at a time. Detached wtype
-  // processes, one per tap, can land out of order under a fast thumb -- and on
-  // the lock screen a scrambled password is a failed unlock, three of which
-  // lock the account for ten minutes (pam_faillock). Text queued while a run is
-  // going is typed together in the next one.
+  // processes, one per tap, can land out of order under a fast thumb -- and a
+  // scrambled password is a failed login or sudo, which pam_faillock counts.
+  // Text queued while a run is going is typed together in the next one.
   property var pendingKeys: []
 
   function typeText(text) {
@@ -107,8 +106,8 @@ Item {
   }
 
   // Text goes to wtype on stdin, never in argv: a process's arguments are
-  // readable by every user on the machine, and on the lock screen this text is
-  // the password. `wtype -` wants EOF, so a shell reads up to a NUL and pipes
+  // readable by every user on the machine, and this text is often a
+  // password. `wtype -` wants EOF, so a shell reads up to a NUL and pipes
   // it on. Written to stdin rather than interpolated, so no character on this
   // keyboard -- `;`, `$`, a backtick -- is ever parsed. The same stdin route as
   // upstream's network panel takes for a Wi-Fi password.

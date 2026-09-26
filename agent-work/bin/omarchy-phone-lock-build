@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # omarchy:summary=Build the phone's lock screen from Omarchy's own lock service.
-# omarchy:args=[--clean]
+# omarchy:args=[--clean|--no-probe]
 # omarchy:examples=omarchy-phone-lock-build
 
 # The phone's lock is Omarchy's lock service -- PAM, fingerprint, blanking,
@@ -14,7 +14,8 @@
 # Everything but LockView.qml is copied from the Omarchy installed here, at
 # build time, so the service always matches the shell that runs it. The copy
 # lands in plugins/phone-lock/ and is not committed (see its .gitignore).
-# Re-run this after an Omarchy update.
+# After an Omarchy update, run omarchy-phone-install --apply, which runs this
+# and then switches Omarchy's own lock on or off to match how it went.
 
 set -euo pipefail
 
@@ -28,35 +29,56 @@ LIST="$TARGET/.generated"
 
 say() { echo "omarchy-phone-lock-build: $*" >&2; }
 
-# manifest.json goes first: the link script and the installer take a plugin
-# directory without one as not there, so from the first file removed until a
-# build completes, Omarchy's own lock stays in charge.
+# Removes the build: manifest.json first, since the link script and the
+# installer take a plugin directory without one as not there. Only for
+# --clean, and for the installer to fall back with: a failed build leaves the
+# previous one untouched.
 clean() {
   local name
   rm -f -- "$TARGET/manifest.json" "$TARGET/manifest.json.tmp"
   if [[ -f $LIST ]]; then
     while IFS= read -r name; do
-      [[ -n $name && $name != */* && $name != LockView.qml && $name != manifest.in.json ]] || continue
+      [[ -n $name && $name != . && $name != .. && $name != */* \
+        && $name != LockView.qml && $name != manifest.in.json ]] || continue
       rm -rf -- "${TARGET:?}/$name"
     done <"$LIST"
     rm -f -- "$LIST"
   fi
 }
 
+# A build that fails changes nothing: whatever lock is running now -- the
+# previous build, or Omarchy's own -- keeps running. Removing a working build
+# here would leave the phone with no lock service at all while shell.json still
+# switches Omarchy's own off; putting that right is the installer's job
+# (omarchy-phone-install --apply cleans a build that fails, then switches
+# Omarchy's own lock back on).
 fail() {
   say "$*"
-  clean
+  say "nothing changed; run omarchy-phone-install --apply to fall back to Omarchy's own lock"
   exit 1
 }
 
+warn_unlocked() {
+  local config="${XDG_CONFIG_HOME:-$HOME/.config}/omarchy/shell.json"
+  if jq -e '(.disabledPlugins // []) | index("omarchy.lock") != null' "$config" >/dev/null 2>&1; then
+    say "Omarchy's own lock is still switched off: run omarchy-phone-install --apply to switch it back on"
+  fi
+}
+
+probe_wanted=1
 case ${1:-} in
 "") ;;
+# For previews on a machine without Quickshell (tools/preview/README.md): the
+# build without its compile check. Never on a phone -- the installer does not
+# pass it, and rebuilds with the check.
+--no-probe) probe_wanted=0 ;;
 --clean)
   clean
+  warn_unlocked
   exit 0
   ;;
 *)
-  echo "usage: omarchy-phone-lock-build [--clean]" >&2
+  echo "usage: omarchy-phone-lock-build [--clean|--no-probe]" >&2
   exit 1
   ;;
 esac
@@ -71,57 +93,147 @@ done
 # phone's view: one the view lacks is a QML error, and the service would not
 # load -- no lock at all. Upstream's view offers nothing else the service uses
 # (no calls into it by id), which is checked too.
-mapfile -t wanted < <(awk '
-  /^[[:space:]]*LockView \{[[:space:]]*$/ { depth = 1; next }
-  depth > 0 {
+#
+# Read line by line, with strings and // comments blanked first so a brace in
+# either cannot throw the depth count off. Anything this does not follow --
+# content after a block's opening brace, or a LockView it did not enter --
+# fails the build rather than going unchecked.
+contract=$(awk '
+  {
     line = $0
-    if (depth == 1 && match(line, /^[[:space:]]*[A-Za-z_][A-Za-z0-9_]*:/)) {
-      name = substr(line, RSTART, RLENGTH - 1); gsub(/[[:space:]]/, "", name)
-      if (name != "id" && name != "objectName") print name
-    }
-    opens = gsub(/\{/, "{", line); closes = gsub(/\}/, "}", line)
-    depth += opens - closes
+    gsub(/"([^"\\]|\\.)*"/, "\"\"", line)
+    gsub(/\047([^\047\\]|\\.)*\047/, "\047\047", line)
+    sub(/\/\/.*/, "", line)
   }
-' "$SOURCE/Service.qml" | sort -u)
-((${#wanted[@]} > 0)) || fail "found no LockView in $SOURCE/Service.qml; not built"
+  depth == 0 && line ~ /^[[:space:]]*LockView[[:space:]]*\{/ {
+    blocks++
+    rest = line
+    sub(/^[[:space:]]*LockView[[:space:]]*\{/, "", rest)
+    if (rest ~ /[^[:space:]]/) print "unreadable"
+    depth = 1
+    next
+  }
+  depth > 0 {
+    if (depth == 1 && match(line, /^[[:space:]]*[A-Za-z_][A-Za-z0-9_]*[[:space:]]*:/)) {
+      name = substr(line, RSTART, RLENGTH - 1); gsub(/[[:space:]]/, "", name)
+      if (name == "id") {
+        value = substr(line, RSTART + RLENGTH); gsub(/[[:space:]]/, "", value)
+        print "id " value
+      } else if (name != "objectName") {
+        print "uses " name
+      }
+    }
+    depth += gsub(/\{/, "{", line) - gsub(/\}/, "}", line)
+  }
+  END { print "blocks " blocks + 0 }
+' "$SOURCE/Service.qml")
 
-for name in "${wanted[@]}"; do
+blocks=$(sed -n 's/^blocks //p' <<<"$contract")
+mentions=$(grep -c 'LockView[[:space:]]*{' "$SOURCE/Service.qml" || true)
+((blocks > 0)) || fail "found no LockView in $SOURCE/Service.qml; not built"
+((blocks == mentions)) && ! grep -qx unreadable <<<"$contract" \
+  || fail "could not read every LockView in $SOURCE/Service.qml; not built"
+
+# What every Item already has needs no declaring.
+inherited=" visible enabled focus opacity z x y width height clip layer states transitions scale rotation "
+while read -r name; do
+  [[ -n $name && $inherited != *" $name "* ]] || continue
   if [[ $name =~ ^on([A-Z])(.*)$ ]]; then
     signal="${BASH_REMATCH[1],}${BASH_REMATCH[2]}"
-    grep -Eq "^[[:space:]]*signal[[:space:]]+$signal\(" "$TARGET/LockView.qml" \
+    grep -Eq "^[[:space:]]*signal[[:space:]]+$signal[[:space:]]*\(" "$TARGET/LockView.qml" \
       || fail "the lock service handles signal '$signal', which the phone's LockView.qml lacks; not built"
   else
-    grep -Eq "^[[:space:]]*(readonly[[:space:]]+)?property[[:space:]]+[A-Za-z]+[[:space:]]+$name\b" "$TARGET/LockView.qml" \
+    grep -Eq "^[[:space:]]*((required|readonly|default)[[:space:]]+)*property[[:space:]]+[A-Za-z_<>.]+[[:space:]]+$name\b" "$TARGET/LockView.qml" \
       || fail "the lock service sets '$name', which the phone's LockView.qml lacks; not built"
   fi
-done
+done < <(sed -n 's/^uses //p' <<<"$contract" | sort -u)
 
-view_ids=$(awk '/^[[:space:]]*LockView \{/ { getline; if (match($0, /id: [A-Za-z_]+/)) print substr($0, RSTART + 4, RLENGTH - 4) }' "$SOURCE/Service.qml")
-for view_id in $view_ids; do
+while read -r view_id; do
+  [[ -n $view_id ]] || continue
   ! grep -Eq "\b$view_id\.[a-z]" "$SOURCE/Service.qml" \
     || fail "the lock service calls into its view ($view_id.*); the phone's view is not checked for that; not built"
-done
+done < <(sed -n 's/^id //p' <<<"$contract")
 
-clean
+# The new build is put together beside the old one, compiled, and only then
+# moved in, file by file, manifest last -- so a lock that is up while this runs
+# never loses the files it was loaded from.
+stage=$(mktemp -d "$TARGET/.stage.XXXXXX")
+probe=$(mktemp -d)
+trap 'rm -rf "$stage" "$probe"' EXIT
 
-# Every file of upstream's lock but its view and manifest, recorded as copied.
-: >"$LIST"
+# Every file of upstream's lock but its view and manifest.
+names=()
 for path in "$SOURCE"/* "$SOURCE"/.[!.]*; do
   [[ -e $path ]] || continue
   name=${path##*/}
   case $name in
   LockView.qml | manifest.json) continue ;;
-  manifest.in.json | .generated | .gitignore) fail "upstream's lock has a file named $name; not built" ;;
+  manifest.in.json | .generated | .gitignore | .stage.*) fail "upstream's lock has a file named $name; not built" ;;
   esac
-  echo "$name" >>"$LIST"
-  cp -a "$path" "$TARGET/$name"
+  names+=("$name")
+  cp -a "$path" "$stage/$name"
 done
+cp -a "$TARGET/LockView.qml" "$stage/LockView.qml"
 
 # The lock's own id, kinds, capabilities and entry points, with ours on top.
 jq -s '.[0] as $source | .[1] as $ours
     | ($source * $ours) | .omarchy.clonedFrom = $source.id' \
-  "$SOURCE/manifest.json" "$TARGET/manifest.in.json" >"$TARGET/manifest.json.tmp" \
-  || fail "could not write manifest.json"
-mv "$TARGET/manifest.json.tmp" "$TARGET/manifest.json"
+  "$SOURCE/manifest.json" "$TARGET/manifest.in.json" >"$stage/manifest.json" \
+  || fail "could not write manifest.json; not built"
+
+# Compiled by Quickshell itself -- its modules live inside the qs binary, so
+# nothing else can load them: a throwaway config whose `qs` root carries
+# Omarchy's Commons and Ui, compiling the staged Service.qml (and with it the
+# phone's LockView) without creating anything, then exiting with the result.
+# The name check above catches a contract change with a clear message; this
+# catches everything else that would stop the lock loading, like a component
+# Omarchy has renamed. No window, no Wayland: offscreen.
+ln -s "$OMARCHY_PATH/shell/Commons" "$probe/Commons"
+ln -s "$OMARCHY_PATH/shell/Ui" "$probe/Ui"
+ln -s "$stage" "$probe/lock"
+cat >"$probe/shell.qml" <<'QML'
+import QtQuick
+import Quickshell
+
+Scope {
+  Component.onCompleted: {
+    var service = Qt.createComponent(Qt.resolvedUrl("lock/Service.qml"), Component.PreferSynchronous)
+    if (service.status === Component.Ready) {
+      console.log("omarchy-phone-lock-probe: ok")
+      Qt.exit(0)
+    } else {
+      console.log("omarchy-phone-lock-probe: " + service.errorString())
+      Qt.exit(1)
+    }
+  }
+}
+QML
+if ((probe_wanted)); then
+  command -v qs >/dev/null || fail "qs (Quickshell) not found to compile the lock with; not built"
+  probe_log=$(QT_QPA_PLATFORM=offscreen timeout 30 qs -p "$probe/shell.qml" 2>&1) \
+    && grep -q 'omarchy-phone-lock-probe: ok' <<<"$probe_log" \
+    || fail "the lock does not compile against this Omarchy; not built:
+$(grep -A20 'omarchy-phone-lock-probe' <<<"$probe_log" | head -20)"
+else
+  say "built without the compile check (--no-probe): for previews only, never a phone"
+fi
+
+# In: every new file, then away with what the last build had and this one does
+# not, then the list, then the manifest that makes the host take it.
+for name in "${names[@]}"; do
+  if [[ -d $stage/$name ]]; then
+    rm -rf -- "${TARGET:?}/$name"
+  fi
+  mv -f -- "$stage/$name" "$TARGET/$name"
+done
+if [[ -f $LIST ]]; then
+  while IFS= read -r name; do
+    [[ -n $name && $name != . && $name != .. && $name != */* \
+      && $name != LockView.qml && $name != manifest.in.json ]] || continue
+    [[ " ${names[*]} " == *" $name "* ]] || rm -rf -- "${TARGET:?}/$name"
+  done <"$LIST"
+fi
+printf '%s\n' "${names[@]}" >"$LIST"
+mv -f -- "$stage/manifest.json" "$TARGET/manifest.json"
 
 echo "built $(jq -r .id "$TARGET/manifest.json") from $SOURCE"

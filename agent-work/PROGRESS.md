@@ -9,15 +9,15 @@ hour while work is going on. Newest entry first.
   blurred wallpaper. Swipe up (or tap) for the passcode page: "Enter
   Passcode", a dot for each digit you type, and round number keys with their
   letters under them, as on an iPhone. Enter (the key right of 0) unlocks.
-  Delete and Cancel sit under the pad; after a few seconds untouched it goes
-  back to the time.
+  Delete and Cancel sit under the pad. After about 12 seconds untouched it
+  goes back to the time (the screen itself goes dark after 5).
 - **Your passcode is your Linux password.** If it is all digits, the number
   pad is all you need, like a phone PIN. If it has letters or symbols, tap
   ABC for a letter keyboard (and #+= on it for symbols). A keyboard plugged in
   or paired works on both pages.
-- **Wrong passcodes**: the dots shake and the reason shows above them. After a
-  few wrong tries in a row the system makes you wait a while before trying
-  again, as the desktop lock does.
+- **Wrong passcodes**: the dots shake and "Authentication failed" shows above
+  them. After 10 wrong tries in a row, even the right passcode is refused for
+  2 minutes (the message does not change), as at the desktop lock.
 - **Everything else is Omarchy's own lock**, unchanged (fingerprint unlock
   too, where a sensor is set up). The installer builds it from the Omarchy on
   the phone and switches Omarchy's desktop lock off; if the build fails,
@@ -52,8 +52,10 @@ run on a phone yet.
 - Type the password on the hardware keyboard and press Enter.
 - Without one, hold the power button to force the phone off and boot it
   again; the lock does not survive a reboot.
-- Then run `omarchy-phone-lock-build --clean` and `omarchy-phone-install
-  --apply` to go back to Omarchy's own lock (the Lock tile then hides).
+- Then, to go back to Omarchy's own lock (the Lock tile then hides), run:
+  `mkdir -p ~/.config/omarchy-phone && touch ~/.config/omarchy-phone/no-phone-lock`
+  and then `omarchy-phone-install --apply`. Delete that file and run the
+  installer again to bring the phone lock back.
 
 Restarting the shell over SSH does not help, because the lock takes a stranded
 lock back on start.

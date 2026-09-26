@@ -79,7 +79,7 @@ harness's wallpaper (written as a PNG for it, in `PREVIEW_WALLPAPER`), and
 echoes typing back as the lock service would. Drive it with `--actions`:
 
 ```bash
-bin/omarchy-phone-lock-build
+bin/omarchy-phone-lock-build --no-probe   # no Quickshell here to compile it with
 dir=$(mktemp -d) && cp -a plugins/phone-lock/. tools/preview/fixtures/LockPreview.qml "$dir"/
 tools/preview/render.py --plugin "$dir":LockPreview.qml --w 360 --h 780 --scale 3 \
   --theme tokyo-night --blur none \

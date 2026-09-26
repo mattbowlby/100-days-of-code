@@ -119,7 +119,8 @@ Item {
   }
 
   // A wrong passcode: the dots shake, as iOS's do, and the page stays up.
-  onFailureMessageChanged: if (errorState) { entering = true; shake.restart(); idle.restart() }
+  // Read directly: errorState is a binding on it and may not have caught up.
+  onFailureMessageChanged: if (failureMessage.length > 0) { entering = true; shake.restart(); idle.restart() }
   onInputEnabledChanged: {
     if (inputEnabled) Qt.callLater(forcePasswordFocus)
     else showTime()
@@ -141,7 +142,10 @@ Item {
         root.submit()
       } else if (event.key === Qt.Key_Backspace) {
         root.backspace()
-      } else if (event.text.length > 0 && event.text.charCodeAt(0) >= 32 && !(event.modifiers & Qt.ControlModifier)) {
+      } else if (event.text.length > 0 && event.text.charCodeAt(0) >= 32 && event.text.charCodeAt(0) !== 127
+          && !(event.modifiers & (Qt.ControlModifier | Qt.AltModifier | Qt.MetaModifier))) {
+        // Printable only: Delete sends DEL (127), and Alt or Super with a
+        // letter is a shortcut, not a character. AltGr is neither.
         root.type(event.text)
       } else {
         return
@@ -205,10 +209,16 @@ Item {
   //
   // The swipe up is on this same area: a handler on the item that takes the
   // press sees it first, where one on the root would never see it at all.
+  //
+  // Judged on the page the press began on: a key's tap handler hears the
+  // release before this does, and one that just left the passcode page
+  // (Cancel) must not be followed by this opening it again.
   MouseArea {
+    property bool pressedOnTime: false
+
     anchors.fill: parent
-    onPressed: root.wakeRequested()
-    onClicked: if (!root.entering) root.showPasscode()
+    onPressed: { pressedOnTime = !root.entering; root.wakeRequested() }
+    onClicked: if (pressedOnTime && !root.entering) root.showPasscode()
 
     DragHandler {
       target: null
@@ -240,7 +250,7 @@ Item {
     Text {
       width: parent.width
       horizontalAlignment: Text.AlignHCenter
-      text: ""
+      text: "\uf023"  // a padlock (Nerd Font)
       color: Color.lock.text
       font.family: Style.font.family
       font.pixelSize: Style.font.title
@@ -354,15 +364,16 @@ Item {
       visible: root.padMode !== "digits"
     }
 
-    // iOS's two text buttons under the pad.
+    // iOS's two text buttons under the pad's outer columns.
     Item {
-      width: parent.width
+      anchors.horizontalCenter: parent.horizontalCenter
+      width: root.padMode === "digits" ? root.keySize * 3 + Style.spacing.xxl * 2 : parent.width
       height: Style.space(40)
 
       TextButton {
         anchors.left: parent.left
         label: root.padMode === "digits" ? "ABC" : "123"
-        onActivated: root.padMode = root.padMode === "digits" ? "letters" : "digits"
+        onActivated: { root.padMode = root.padMode === "digits" ? "letters" : "digits"; idle.restart() }
       }
 
       TextButton {
@@ -549,11 +560,11 @@ Item {
       id: letterTap
       onTapped: {
         switch (letterKey.cap) {
-        case "⇧": root.shifted = !root.shifted; break
+        case "⇧": root.shifted = !root.shifted; idle.restart(); break
         case "⌫": root.backspace(); break
         case "⏎": root.submit(); break
-        case "#+=": root.padMode = "symbols"; break
-        case "ABC": root.padMode = "letters"; break
+        case "#+=": root.padMode = "symbols"; idle.restart(); break
+        case "ABC": root.padMode = "letters"; idle.restart(); break
         default: root.type(letterKey.shown === "space" ? " " : letterKey.shown)
         }
       }

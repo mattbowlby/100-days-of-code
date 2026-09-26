@@ -137,15 +137,31 @@ a round-key number pad and, behind ABC, letters and symbols. The pad draws
 inside the `WlSessionLockSurface`, so it needs no layer above the lock and
 nothing else can pose as it. The passcode is the user's password, checked by
 the same PAM stack (`/etc/pam.d/omarchy-lock-password`); a numeric password
-makes it a PIN. pam_faillock still counts failures, so a few wrong passcodes
-in a row lock the account for a while, as they do at the desktop lock.
+makes it a PIN. pam_faillock still counts failures (Omarchy sets `deny=10
+unlock_time=120`): after ten wrong in a row even the right passcode fails for
+two minutes, with the same "Authentication failed" message. With
+`~/.config/omarchy-phone/no-phone-lock` present the installer removes the
+phone lock instead of building it, the way back to Omarchy's own.
 
 The view is the only part replaced, and its contract with the service is the
 properties the service sets and the signals it handles on each `LockView {`.
 The build reads that list out of upstream's `Service.qml` and refuses when the
 phone's view lacks any of them (a missing one would be a QML error, and the
 service would not load at all), or when the service starts calling into its
-view by id.
+view by id. It then has Quickshell itself compile the staged copy -- `qs -p`
+on a throwaway config, offscreen, since Quickshell's modules live inside its
+binary and no other tool can load them -- which catches anything else that
+would stop the lock loading, such as a component Omarchy has renamed. Only
+then are the files moved in, manifest last. A build that fails changes
+nothing; the installer, on a failed build, removes the old one and switches
+Omarchy's own lock back on. The Lock tile needs `omarchy-shell lock status` to
+answer as well as the plugin to be enabled, so a lock service that failed to
+load never gets a tile that does nothing.
+
+One difference from the built-in: a third-party plugin's `shell` has no
+`services`, so the copied service's `batteryService` is always null and
+`powerSaverActive` stays false. A video wallpaper on the lock therefore keeps
+playing under power saver, where Omarchy's own lock would pause it.
 
 The **Lock tile** runs `omarchy-system-lock`. It shows only while
 `dev.omarchyphone.lock` is enabled, which the bar asks

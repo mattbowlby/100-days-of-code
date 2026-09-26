@@ -12,7 +12,9 @@
 # installed here at build time, so it always matches the shell that runs it.
 #
 # The copy lands in plugins/phone-notifications/ next to Banners.qml and is not
-# committed (see its .gitignore). Re-run this after an Omarchy update.
+# committed (see its .gitignore). After an Omarchy update, run
+# omarchy-phone-install --apply, which runs this and then switches Omarchy's own
+# notifications on or off to match how it went.
 
 set -euo pipefail
 
@@ -34,13 +36,24 @@ clean() {
 fail() {
   echo "omarchy-phone-notifications-build: $*" >&2
   clean
+  warn_silenced
   exit 1
+}
+
+# With the build gone, Omarchy's own notifications are off in shell.json only
+# until omarchy-phone-install --apply switches them back on.
+warn_silenced() {
+  local config="${XDG_CONFIG_HOME:-$HOME/.config}/omarchy/shell.json"
+  if jq -e '(.disabledPlugins // []) | index("omarchy.notifications") != null' "$config" >/dev/null 2>&1; then
+    echo "omarchy-phone-notifications-build: Omarchy's own notifications are still switched off: run omarchy-phone-install --apply to switch them back on" >&2
+  fi
 }
 
 case ${1:-} in
 "") ;;
 --clean)
   clean
+  warn_silenced
   exit 0
   ;;
 *)
