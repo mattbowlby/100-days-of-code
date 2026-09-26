@@ -1,0 +1,12 @@
+<resources>
+    <!-- Transparent over the system wallpaper, edge to edge, no title bar:
+         what a home screen is. -->
+    <style name="Theme.Launcher" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowShowWallpaper">true</item>
+        <item name="android:windowBackground">@android:color/transparent</item>
+        <item name="android:windowIsTranslucent">false</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+        <item name="android:windowLayoutInDisplayCutoutMode">always</item>
+    </style>
+</resources>
