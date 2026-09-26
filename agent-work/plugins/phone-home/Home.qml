@@ -388,9 +388,9 @@ Item {
   property string query: ""
   // As many results as fit above the on-screen keyboard, up to eight, and none
   // when not even one does (a landscape phone at a large font), rather than a
-  // row laid out, and tappable, under the keyboard. The
-  // keyboard's height is phone-keyboard's own sum (four 44px rows and five
-  // gaps); it is another plugin, so it is restated here and must follow it.
+  // row laid out, and tappable, under the keyboard. The keyboard's height is
+  // phone-keyboard's own sum (four 44px rows and five gaps); it is another
+  // plugin, so it is restated here and must follow it.
   readonly property int keyboardHeight: Style.space(44) * 4 + Style.spacing.xs * 5
   readonly property int searchResultLimit: Math.max(0, Math.min(8, Math.floor(
     (surfaceHeight - keyboardHeight - (barAtBottom ? barSpace : 0)
