@@ -369,8 +369,10 @@ Item {
   }
 
   // Never closes; see the header. The host may still call this when it hides
-  // plugins, and it has nothing to do.
-  function close() {}
+  // plugins; the only thing to put away then is a search in progress.
+  function close() {
+    closeSearch()
+  }
 
   // ---------------------------------------------------------------- search
   //
@@ -408,12 +410,14 @@ Item {
 
   // A window opening over the home screen -- from anywhere, not just a result
   // tapped here -- ends the search: the keyboard and the field's hold on the
-  // keys belong to what is now in front.
-  Connections {
-    target: ToplevelManager
-    function onActiveToplevelChanged() {
-      if (ToplevelManager.activeToplevel) root.closeSearch()
-    }
+  // keys belong to what is now in front. Watched by the window count, not the
+  // active window: while this surface holds exclusive keyboard focus Hyprland
+  // will not focus a new window, so the active window would never change.
+  readonly property int windowCount: ToplevelManager.toplevels.values.length
+  property int lastWindowCount: 0
+  onWindowCountChanged: {
+    if (windowCount > lastWindowCount) closeSearch()
+    lastWindowCount = windowCount
   }
 
   function summonKeyboard() {
