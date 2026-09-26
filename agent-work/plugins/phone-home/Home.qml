@@ -273,7 +273,9 @@ Item {
       anchors.top: plate.bottom
       anchors.topMargin: root.labelGap
       anchors.horizontalCenter: parent.horizontalCenter
-      width: parent.width
+      // Narrower than the cell: cells sit edge to edge, and full-width labels
+      // in neighbouring cells would run together into one line of text.
+      width: parent.width - Style.spacing.sm * 2
       text: tile.app ? tile.app.label : ""
       color: Color.foreground
       // Labels sit straight on the wallpaper, whatever it is. An outline in the
@@ -314,7 +316,8 @@ Item {
   readonly property int spreadCount: Math.ceil(pageCount / pagesPerSpread)
 
   // The bottom gesture strip is phone-bar's (see its EdgeSwipe); the dock sits
-  // clear of it so a swipe up for home never starts on an icon.
+  // clear of it so a swipe up for home never starts on an icon. The 16 is the
+  // strip's height, Bar.qml's edgeSize, and the two must stay equal.
   readonly property int gestureClearance: Style.space(16) + Style.spacing.lg
 
   function pageApps(page) {

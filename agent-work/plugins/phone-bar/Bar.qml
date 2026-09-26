@@ -12,8 +12,11 @@ import Quickshell.Wayland
 import qs.Commons
 
 // Phone status bar. Replaces omarchy.bar when shell.json sets bar.id to
-// omarchy.phone.bar; the host falls back to the desktop bar on its own if this
-// fails to load.
+// dev.omarchyphone.bar; the host falls back to the desktop bar on its own if
+// this fails to load.
+//
+// It also owns the screen-edge gestures and the control centre, because the
+// host lets only a bar open other plugins' surfaces (see "gestures" below).
 Item {
   id: root
 
@@ -271,8 +274,10 @@ Item {
     MouseArea {
       anchors.fill: parent
 
-      // Keep the grab once taken: the finger leaves this strip almost at once,
-      // and the move events have to keep arriving here to be measured.
+      // The compositor keeps sending a touch's moves to the surface it went
+      // down on, so the drag stays measurable after the finger leaves this
+      // strip. preventStealing is for the other half: nothing in the item tree
+      // may take the drag over once it has started here.
       preventStealing: true
 
       // -1 is "no gesture", distinct from a press that started at y = 0.
@@ -293,6 +298,204 @@ Item {
 
       onReleased: pressY = -1
       onCanceled: pressY = -1
+    }
+  }
+
+  // ---------------------------------------------------------- control centre
+  //
+  // Swipe down from the top. Replaces the old phone-quicksettings overlay, which
+  // the host's per-plugin scoping left unable to open anything. Living in the
+  // bar it can: Omarchy's own panels are bar widgets, and this is the bar.
+  //
+  // Every tile is the home screen's tile -- the same rounded square, the same
+  // frosted plate -- so the phone has one shape for everything tappable.
+  property bool controlOpen: false
+
+  // Panels open the upstream panel through summonBarWidget(), which needs the
+  // widget loaded in the status row, so a tile shows only while its widget is.
+  // Actions run a command; every one is an existing Omarchy tool.
+  //
+  // Glyphs are Nerd Font codepoints on the default family, written as escapes
+  // and checked by rendering them (NOTES.md): f1eb wifi, f293 bluetooth, f028
+  // volume, f240 battery, f108 display, f023 lock, f030 camera, f186 moon,
+  // f0f4 cup.
+  readonly property var controlTiles: [
+    { panel: "omarchy.network",   icon: "", label: "Network" },
+    { panel: "omarchy.bluetooth", icon: "", label: "Bluetooth" },
+    { panel: "omarchy.audio",     icon: "", label: "Sound" },
+    { panel: "omarchy.power",     icon: "", label: "Battery" },
+    { panel: "omarchy.monitor",   icon: "", label: "Display" },
+    { command: ["omarchy-system-lock"],                               icon: "", label: "Lock" },
+    { command: ["omarchy-capture-screenshot", "fullscreen", "save"],  icon: "", label: "Screenshot" },
+    { command: ["omarchy-toggle-nightlight"],                         icon: "", label: "Night Light" },
+    { command: ["omarchy-toggle-idle"],                               icon: "", label: "Stay Awake" }
+  ]
+
+  readonly property var visibleControlTiles: {
+    var out = []
+    for (var i = 0; i < controlTiles.length; i++) {
+      var tile = controlTiles[i]
+      if (tile.panel && !widgetItems[tile.panel]) continue
+      out.push(tile)
+    }
+    return out
+  }
+
+  function openControl() {
+    // One sheet at a time: a panel the sheet opened earlier closes first.
+    if (activePopout) requestPopout(null)
+    controlOpen = true
+  }
+
+  function closeControl() {
+    controlOpen = false
+  }
+
+  // The sheet goes first, then the tile's work: a panel wants the room, and a
+  // screenshot taken with the sheet still up is a screenshot of the sheet.
+  property var pendingTile: null
+
+  function activateTile(tile) {
+    closeControl()
+    pendingTile = tile
+    tileDelay.restart()
+  }
+
+  Timer {
+    id: tileDelay
+
+    // Long enough for the layer to unmap before a capture reads the screen.
+    interval: 250
+    onTriggered: {
+      var tile = root.pendingTile
+      root.pendingTile = null
+      if (!tile) return
+      if (tile.panel) root.summonBarWidget(tile.panel)
+      else if (tile.command) Quickshell.execDetached(tile.command)
+    }
+  }
+
+  // The control centre sheet: a frosted card of tiles dropping from the top,
+  // over everything, dismissed by a tap anywhere off it.
+  component ControlCentre: PanelWindow {
+    id: sheetWindow
+
+    // Tiles use the home screen's proportions: four across, a rounded square
+    // at 0.27 of its side, glyph at 0.45. The size is worked out from the width
+    // so four always fit, whatever the theme's font scale does.
+    readonly property int pad: Style.spacing.xxl
+    readonly property int gap: Style.spacing.lg
+    readonly property int tileSize: Math.min(Style.space(64),
+      Math.floor((Math.min(width, Style.space(420)) - pad * 2 - gap * 3) / 4))
+
+    visible: root.controlOpen
+    anchors { top: true; bottom: true; left: true; right: true }
+    color: "transparent"
+
+    WlrLayershell.namespace: "omarchy-phone-control"
+    // Overlay: above the edge strips and any Top-layer panel it replaces.
+    WlrLayershell.layer: WlrLayer.Overlay
+    WlrLayershell.keyboardFocus: WlrKeyboardFocus.None
+    exclusionMode: ExclusionMode.Ignore
+
+    // Off the card is "tapped away" -- the only dismissal a phone has. The
+    // whole screen behind the card is dimmed with the theme's background, and
+    // being over the blur rule's ignore_alpha, frosted as well: what is behind
+    // recedes, as it does under iOS's control centre.
+    Rectangle {
+      anchors.fill: parent
+      color: Util.alpha(Color.background, 0.35)
+
+      MouseArea {
+        anchors.fill: parent
+        onClicked: root.closeControl()
+      }
+    }
+
+    Rectangle {
+      id: card
+
+      anchors.horizontalCenter: parent.horizontalCenter
+      anchors.top: parent.top
+      anchors.topMargin: (root.position === "bottom" ? 0 : root.barSize) + sheetWindow.gap
+      width: Math.min(parent.width - sheetWindow.gap * 2, Style.space(420))
+      height: tileGrid.height + sheetWindow.pad * 2
+      radius: Math.round(sheetWindow.tileSize * 0.27) + sheetWindow.pad / 2
+      color: Util.alpha(Color.background, 0.45)
+      border.width: Math.max(1, Style.space(1))
+      border.color: Util.alpha(Color.foreground, 0.16)
+
+      // Taps on the card's own background are not taps away.
+      MouseArea { anchors.fill: parent }
+
+      Grid {
+        id: tileGrid
+
+        anchors.centerIn: parent
+        columns: 4
+        columnSpacing: sheetWindow.gap
+        rowSpacing: sheetWindow.gap
+
+        Repeater {
+          model: root.visibleControlTiles
+
+          delegate: Item {
+            id: controlTile
+
+            required property var modelData
+
+            width: sheetWindow.tileSize
+            height: sheetWindow.tileSize + Style.spacing.xs + tileLabel.implicitHeight
+
+            Rectangle {
+              id: controlPlate
+
+              width: sheetWindow.tileSize
+              height: sheetWindow.tileSize
+              radius: Math.round(sheetWindow.tileSize * 0.27)
+              color: Util.alpha(Color.background, 0.32)
+              border.width: Math.max(1, Style.space(1))
+              border.color: Util.alpha(Color.foreground, 0.22)
+              scale: controlTap.pressed ? 0.92 : 1
+              Behavior on scale { NumberAnimation { duration: 110; easing.type: Easing.OutQuad } }
+
+              Rectangle {
+                anchors.fill: parent
+                radius: parent.radius
+                color: Util.alpha(Color.foreground, controlTap.pressed ? 0.2 : 0.08)
+              }
+
+              Text {
+                anchors.centerIn: parent
+                text: controlTile.modelData.icon
+                color: Color.foreground
+                font.family: Style.font.family
+                font.pixelSize: Math.round(sheetWindow.tileSize * 0.45)
+              }
+            }
+
+            Text {
+              id: tileLabel
+
+              anchors.top: controlPlate.bottom
+              anchors.topMargin: Style.spacing.xs
+              width: parent.width
+              text: controlTile.modelData.label
+              color: Color.foreground
+              font.family: Style.font.family
+              font.pixelSize: Style.font.caption
+              horizontalAlignment: Text.AlignHCenter
+              elide: Text.ElideRight
+              maximumLineCount: 1
+            }
+
+            TapHandler {
+              id: controlTap
+              onTapped: root.activateTile(controlTile.modelData)
+            }
+          }
+        }
+      }
     }
   }
 
@@ -332,6 +535,32 @@ Item {
     }
   }
 
+  Variants {
+    model: Quickshell.screens
+
+    delegate: Component {
+      EdgeSwipe {
+        required property var modelData
+
+        screen: modelData
+        edge: "top"
+        onTriggered: root.openControl()
+      }
+    }
+  }
+
+  Variants {
+    model: Quickshell.screens
+
+    delegate: Component {
+      ControlCentre {
+        required property var modelData
+
+        screen: modelData
+      }
+    }
+  }
+
   component PhoneBarPanel: PanelWindow {
     id: barWindow
 
@@ -347,7 +576,11 @@ Item {
     // See-through, as the rest of the phone's shell is: the theme's bar colour
     // over a Hyprland blur (config/hypr/looknfeel.lua), so the wallpaper and
     // the home screen show through frosted rather than behind a solid strip.
-    color: Util.alpha(Color.bar.background, 0.5)
+    // Halved, not replaced: Util.alpha() would overwrite a theme's own
+    // bar.background-alpha, and a theme that asks for a clear bar should get
+    // one.
+    color: Qt.rgba(Color.bar.background.r, Color.bar.background.g, Color.bar.background.b,
+      Color.bar.background.a * 0.5)
     surfaceFormat.opaque: false
 
     // Its own namespace, so a layer rule can target the phone bar without also
