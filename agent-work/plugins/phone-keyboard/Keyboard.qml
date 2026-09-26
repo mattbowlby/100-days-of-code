@@ -2,6 +2,7 @@ pragma ComponentBehavior: Bound
 
 import QtQuick
 import Quickshell
+import Quickshell.Io
 import Quickshell.Wayland
 import qs.Commons
 
@@ -65,21 +66,61 @@ Item {
     if (shell && typeof shell.hide === "function") shell.hide("dev.omarchyphone.keyboard")
   }
 
-  // An argv vector, never a command string. Util.execArgv exists because a
-  // shell would re-tokenize this, and every character on this keyboard is
-  // exactly the sort of input that breaks that -- `;`, `$`, a backtick.
-  //
-  // The `--` matters too: `wtype -` means "read from stdin", so typing a bare
-  // hyphen without it hangs on a pipe that never closes instead of producing a
-  // character.
+  // Every key goes through one queue and one wtype at a time. Detached wtype
+  // processes, one per tap, can land out of order under a fast thumb -- and on
+  // the lock screen a scrambled password is a failed unlock, three of which
+  // lock the account for ten minutes (pam_faillock). Text queued while a run is
+  // going is typed together in the next one.
+  property var pendingKeys: []
+
   function typeText(text) {
-    Quickshell.execDetached(["wtype", "--", text])
+    var queue = pendingKeys.slice()
+    var last = queue.length > 0 ? queue[queue.length - 1] : null
+    if (last && last.text !== undefined) last.text += text
+    else queue.push({ text: text })
+    pendingKeys = queue
+    pumpKeys()
   }
 
   // Named keys go through press/release rather than as text; identifiers are
   // resolved by libxkbcommon.
   function typeKey(keyName) {
-    Quickshell.execDetached(["wtype", "-P", keyName, "-p", keyName])
+    pendingKeys = pendingKeys.concat([{ key: keyName }])
+    pumpKeys()
+  }
+
+  function pumpKeys() {
+    if (typer.running || pendingKeys.length === 0) return
+    var next = pendingKeys[0]
+    pendingKeys = pendingKeys.slice(1)
+    if (next.key !== undefined) {
+      typer.secret = ""
+      typer.command = ["wtype", "-P", next.key, "-p", next.key]
+    } else {
+      typer.secret = next.text
+      typer.command = typer.textCommand
+    }
+    typer.running = true
+  }
+
+  // Text goes to wtype on stdin, never in argv: a process's arguments are
+  // readable by every user on the machine, and on the lock screen this text is
+  // the password. `wtype -` wants EOF, so a shell reads up to a NUL and pipes
+  // it on. Written to stdin rather than interpolated, so no character on this
+  // keyboard -- `;`, `$`, a backtick -- is ever parsed. The same stdin route as
+  // upstream's network panel takes for a Wi-Fi password.
+  Process {
+    id: typer
+
+    property string secret: ""
+    readonly property var textCommand: ["bash", "-c", "IFS= read -r -d '' t; printf '%s' \"$t\" | wtype -"]
+
+    stdinEnabled: true
+    onStarted: {
+      if (secret !== "") write(secret + "\u0000")
+      secret = ""
+    }
+    onExited: root.pumpKeys()
   }
 
   PanelWindow {
@@ -232,7 +273,8 @@ Item {
       text: key.label
       color: key.active ? Color.accent : Color.foreground
       font.family: Style.font.family
-      font.pixelSize: key.functional ? Style.font.bodySmall : Style.font.title
+      // Characters at half the key's height, as iOS sets them.
+      font.pixelSize: key.functional ? Style.font.bodySmall : Math.round(root.keyHeight * 0.5)
     }
 
     // Fires on press, not on release: a keyboard that waits for the finger to

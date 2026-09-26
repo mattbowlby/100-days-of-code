@@ -3,6 +3,50 @@
 Pushed to `agent-work/` on branch `claude/nifty-hamilton-ezxf50` at least once an
 hour while work is going on. Newest entry first.
 
+## 2026-09-26 (later): keyboard restyle, opt-in lock
+
+- **Keyboard look**: see-through and frosted like the home screen, with
+  rounded keys. Letters are brighter and larger than shift, ?123, space, back
+  and enter, as on iOS.
+- **Fix: the symbols layer never appeared.** The check read `layer` (every QML
+  item's built-in layer-effects object, never `"symbols"`); it now reads
+  `keyLayer`.
+- **Keystrokes are typed in order, and never appear in a process list.** One
+  queue, one wtype at a time, text passed on stdin.
+- **Opt-in Lock tile.**
+  - To enable it: `touch ~/.config/omarchy-phone/lock-with-keyboard`. A Lock
+    tile then appears in the control centre.
+  - It locks with Omarchy's password lock and brings the on-screen keyboard
+    up over it. The keyboard goes away by itself a few seconds after
+    unlocking.
+  - Auto-lock, lock-on-suspend and the power button still never lock.
+
+**NEEDS HARDWARE: check this on the phone before relying on it.** It has not
+run on a phone yet.
+
+1. Attach a hardware keyboard first (USB-C, or Bluetooth already paired), so
+   the password can be typed if the test fails.
+2. Run `hyprctl configerrors`. It must print nothing, because an older
+   Hyprland without `above_lock` would reject the rule.
+   `omarchy-shell lock status` must show `"passwordPam":true`.
+3. Enable the tile (above), swipe down, and tap Lock.
+4. Check all four:
+   - the keyboard is drawn over the lock screen
+   - tapping keys puts dots in the password field
+   - enter unlocks
+   - the keyboard disappears within a few seconds
+5. Only then use it without a hardware keyboard.
+
+**If the keyboard does not appear over the lock:**
+
+- Type the password on the hardware keyboard.
+- Without one, hold the power button to force the phone off and boot it
+  again; the lock does not survive a reboot.
+- Then run `rm ~/.config/omarchy-phone/lock-with-keyboard` to hide the tile.
+
+Restarting the shell over SSH does not help, because Omarchy's lock takes a
+stranded lock back on start.
+
 ## 2026-09-26: home screen, control centre, see-through look
 
 **What changed:**
@@ -52,26 +96,20 @@ hour while work is going on. Newest entry first.
   from a harness with Quickshell stubbed out, not screenshots of a phone.
 - Hyprland and Omarchy behaviour was checked against their source code.
 
-**The phone is never locked, for now.** Omarchy's lock screen needs a typed
-password, and the on-screen keyboard can't appear over it, so a locked phone
-could not be unlocked. Until there is a phone lock with a PIN pad (next on the
-list):
+**The phone does not lock by itself, for now.** Omarchy's lock screen needs a
+typed password, and until it is proven on a phone that the on-screen keyboard
+comes up over it, nothing locks automatically:
 
 - The power button only turns the screen off.
-- There is no Lock tile.
-- The installer switches off Omarchy's 5-minute auto-lock, and its
+- The installer switches off Omarchy's 5-minute auto-lock and its
   lock-on-suspend (a closed flip cover or fold can suspend a phone).
+- The screen never turns off by itself; only the power button blanks it.
+- A blank screen is not locked. Hyprland still passes touches to apps while
+  the screen is off, so a phone in a pocket may register taps, depending on
+  whether its touch controller stays powered.
 
 The same problem was in the original port, where the power button locked the
-phone.
-
-Two more consequences, until the lock exists:
-
-- **The screen never turns off by itself.** Only the power button blanks it.
-- **A blank screen is not locked.** Hyprland still passes touches to apps
-  while the screen is off, and only a key press wakes it. So a phone in a
-  pocket may register taps, depending on whether its touch controller stays
-  powered.
+phone. See the next entry for the opt-in lock.
 
 **Not yet done:**
 
