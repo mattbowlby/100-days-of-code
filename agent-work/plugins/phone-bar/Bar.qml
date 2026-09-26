@@ -251,9 +251,7 @@ Item {
     + "if w and w.windows > 0 then hl.dispatch(hl.dsp.focus({ workspace = \"empty\" })) end"
 
   function goHome() {
-    var workspace = Hyprland.focusedWorkspace
-    var home = !!workspace && workspace.toplevels.values.length === 0
-    if (!home) {
+    if (appInFront) {
       Quickshell.execDetached(["hyprctl", "eval", goHomeLua])
       return
     }
@@ -329,7 +327,27 @@ Item {
       onReleased: pressY = -1
       onCanceled: pressY = -1
     }
+
+    // The home indicator: the pill iOS draws where the swipe home begins. Only
+    // over an app -- the home screen itself needs no directions home -- and
+    // only on the bottom strip. Proportions are iOS's, 134 by 5 on 375.
+    Rectangle {
+      anchors.horizontalCenter: parent.horizontalCenter
+      anchors.bottom: parent.bottom
+      anchors.bottomMargin: Math.round((parent.height - height) / 2)
+      width: Math.round(parent.width * 0.36)
+      height: Math.max(3, Style.space(5))
+      radius: height / 2
+      color: Util.alpha(Color.foreground, 0.7)
+      visible: edgeWindow.edge === "bottom" && root.appInFront
+    }
   }
+
+  // Whether the focused workspace holds a window -- that is, whether an app is
+  // on screen rather than the home screen. Read from Quickshell's view of
+  // Hyprland, as goHome() reads it.
+  readonly property bool appInFront: !!Hyprland.focusedWorkspace
+    && Hyprland.focusedWorkspace.toplevels.values.length > 0
 
   // ---------------------------------------------------------- control centre
   //

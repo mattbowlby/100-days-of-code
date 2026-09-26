@@ -1,3 +1,5 @@
 pragma Singleton
 import QtQuick
-QtObject { property var focusedWorkspace: ({ id: 1, toplevels: { values: [] } }) }
+import Quickshell
+// TOPLEVELS set in the environment puts one window on the focused workspace.
+QtObject { property var focusedWorkspace: ({ id: 1, toplevels: { values: (Quickshell.env("TOPLEVELS") ? [1] : []) } }) }

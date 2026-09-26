@@ -48,7 +48,7 @@ def main():
     home = work / "home"; theme = home / ".local/state/omarchy/current/theme"
     theme.mkdir(parents=True, exist_ok=True)
     shutil.copy(OMARCHY / "themes" / a.theme / "colors.toml", theme / "colors.toml")
-    env = {"HOME": str(home), "OMARCHY_PATH": str(OMARCHY), "PREVIEW_W": a.w, "PREVIEW_H": a.h}
+    env = {"HOME": str(home), "OMARCHY_PATH": str(OMARCHY), "PREVIEW_W": a.w, "PREVIEW_H": a.h, "TOPLEVELS": os.environ.get("TOPLEVELS", "")}
     (stubs / "Quickshell/PreviewEnv.qml").write_text(
         "pragma Singleton\nimport QtQuick\nQtObject { property var values: %s }\n" % json.dumps(env))
 
