@@ -41,3 +41,7 @@ OMARCHY_PATH=~/src/omarchy tools/preview/render.py \
   `plugins`.
 - **`--apps`** takes a JSON list of `{id, name, icon}` to use in place of
   Omarchy's web-app icons.
+- **`TOPLEVELS`**, set to any non-empty value in the environment, puts one
+  window on the focused workspace in the Hyprland stub. The bar then renders
+  as it does over an app, with the home indicator, rather than over the home
+  screen. For example: `TOPLEVELS=1 tools/preview/render.py ...`.

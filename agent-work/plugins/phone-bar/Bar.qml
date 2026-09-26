@@ -335,12 +335,13 @@ Item {
 
     // The home indicator: the pill iOS draws where the swipe home begins. Only
     // over an app -- the home screen itself needs no directions home -- and
-    // only on the bottom strip. Proportions are iOS's, 134 by 5 on 375.
+    // only on the bottom strip. iOS's size, 134 by 5 on a 375 screen, and like
+    // iOS's it does not keep growing on a wide one.
     Rectangle {
       anchors.horizontalCenter: parent.horizontalCenter
       anchors.bottom: parent.bottom
       anchors.bottomMargin: Math.round((parent.height - height) / 2)
-      width: Math.round(parent.width * 0.36)
+      width: Math.min(Math.round(parent.width * 0.36), Style.space(134))
       height: Math.max(3, Style.space(5))
       radius: height / 2
       color: Util.alpha(Color.foreground, 0.7)
@@ -350,7 +351,7 @@ Item {
 
   // Whether the focused workspace holds a window -- that is, whether an app is
   // on screen rather than the home screen. Read from Quickshell's view of
-  // Hyprland, as goHome() reads it.
+  // Hyprland, as upstream's workspace widget reads it; goHome() branches on it.
   readonly property bool appInFront: !!Hyprland.focusedWorkspace
     && Hyprland.focusedWorkspace.toplevels.values.length > 0
 

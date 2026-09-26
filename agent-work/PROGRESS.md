@@ -11,6 +11,8 @@ hour while work is going on. Newest entry first.
 - **Fix: the symbols layer never appeared.** The check read `layer` (every QML
   item's built-in layer-effects object, never `"symbols"`); it now reads
   `keyLayer`.
+- **Home indicator**: the iOS pill at the bottom edge, shown over apps only
+  (not on the home screen), marking where the swipe home starts.
 - **Keystrokes are typed in order, and never appear in a process list.** One
   queue, one wtype at a time, text passed on stdin.
 - **Opt-in Lock tile.**
