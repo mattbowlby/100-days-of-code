@@ -251,7 +251,12 @@ Item {
     + "if w and w.windows > 0 then hl.dispatch(hl.dsp.focus({ workspace = \"empty\" })) end"
 
   function goHome() {
-    if (appInFront) {
+    // No focused workspace yet (Quickshell's Hyprland view before its first
+    // refresh, just after the shell starts) means "don't know", and the safe
+    // side of not knowing is the dispatch: the Lua checks the real state and
+    // does nothing if already home. Summoning would only reset the pager
+    // behind an app that stays in front.
+    if (!Hyprland.focusedWorkspace || appInFront) {
       Quickshell.execDetached(["hyprctl", "eval", goHomeLua])
       return
     }
