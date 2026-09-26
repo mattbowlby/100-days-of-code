@@ -1,0 +1,10 @@
+module Quickshell
+singleton Quickshell 1.0 Quickshell.qml
+PanelWindow 1.0 PanelWindow.qml
+PanelAnchors 1.0 PanelAnchors.qml
+PanelMargins 1.0 PanelMargins.qml
+Variants 1.0 Variants.qml
+SystemClock 1.0 SystemClock.qml
+ExclusionMode 1.0 ExclusionMode.qml
+singleton PreviewEnv 1.0 PreviewEnv.qml
+SurfaceFormat 1.0 SurfaceFormat.qml

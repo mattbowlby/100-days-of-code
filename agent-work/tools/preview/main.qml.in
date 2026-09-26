@@ -1,0 +1,121 @@
+import QtQuick
+import Quickshell
+
+Item {
+  id: harness
+  property var loads: @LOADS@
+  property var apps: @APPS@
+  property var plugins: []
+  property int pending: 0
+
+  QtObject {
+    id: appLibraryMock
+    signal appsChanged()
+    function sortedEntries(q) {
+      return harness.apps.map(function(a) { return { entry: { id: a.id, name: a.name, icon: a.icon } } })
+    }
+    function entryName(e) { return e ? e.name : "" }
+    function entrySubtext(e) { return "" }
+    function iconSource(i) { return i ? "file://" + String(i).split("/").map(encodeURIComponent).join("/") : "" }
+    function refreshIcons() {}
+    function launch(id, name) { console.log("EXEC launch " + id) }
+  }
+
+  // Stand-ins for Omarchy's status widgets: a glyph, and open()/close() that log.
+  Component {
+    id: fakeWidget
+    Text {
+      property var bar
+      property string moduleName
+      property var settings
+      property bool opened: false
+      function open() { opened = true; console.log("EXEC open-panel " + moduleName) }
+      function close() { opened = false }
+      color: "#c0caf5"
+      font.family: "monospace"
+      font.pixelSize: 12
+      text: ({ "omarchy.network": "\uf1eb", "omarchy.bluetooth": "\uf293", "omarchy.audio": "\uf028", "omarchy.power": "\uf240" })[moduleName] || "?"
+    }
+  }
+  property var fakeWidgets: ({
+    "omarchy.network": { component: fakeWidget }, "omarchy.bluetooth": { component: fakeWidget },
+    "omarchy.audio": { component: fakeWidget }, "omarchy.power": { component: fakeWidget }
+  })
+
+  function makeShell() {
+    return {
+      appLibrary: appLibraryMock,
+      bar: { barHidden: false, barSize: 26, fontFamily: "monospace", position: "top" },
+      barConfig: { position: "top" },
+      summon: function(id, p) { console.log("EXEC summon " + id); return true },
+      toggle: function(id, p) { console.log("EXEC toggle " + id); return true },
+      hide: function(id) { console.log("EXEC hide " + id); return true },
+      isPluginOpen: function(id) { return false },
+      serviceFor: function(id) { return null },
+      updateEntryInline: function() { return false }
+    }
+  }
+
+  function layoutWindow(w, W, H) {
+    var a = w.anchors, m = w.margins
+    var x, y, ww, hh
+    if (a.left && a.right) { x = m.left; ww = W - m.left - m.right }
+    else if (a.left) { x = m.left; ww = w.implicitWidth }
+    else if (a.right) { ww = w.implicitWidth; x = W - ww - m.right }
+    else { ww = w.implicitWidth; x = (W - ww) / 2 }
+    if (a.top && a.bottom) { y = m.top; hh = H - m.top - m.bottom }
+    else if (a.top) { y = m.top; hh = w.implicitHeight }
+    else if (a.bottom) { hh = w.implicitHeight; y = H - hh - m.bottom }
+    else { hh = w.implicitHeight; y = (H - hh) / 2 }
+    w.x = x; w.y = y; w.width = Math.max(1, ww); w.height = Math.max(1, hh)
+    return { x: x, y: y, w: ww, h: hh }
+  }
+
+  Timer { id: shootTimer; interval: 2500; onTriggered: harness.shoot() }
+  Timer { id: actTimer; interval: 700; onTriggered: { var plugins = harness.plugins; @ACTIONS@; harness.layoutAll(); shootTimer.start() } }
+
+  property var geoms: []
+  function layoutAll() {
+    var wins = Quickshell.windows, out = []
+    for (var i = 0; i < wins.length; i++) out.push(layoutWindow(wins[i], @W@, @H@))
+    geoms = out
+  }
+
+  function shoot() {
+    harness.layoutAll()
+    var wins = Quickshell.windows
+    harness.pending = wins.length
+    for (var i = 0; i < wins.length; i++) (function(w, i) {
+      var g = harness.geoms[i]
+      var file = "@SHOTS@/w" + i + ".png"
+      var c = w.color
+      var meta = { file: file, ns: w.wlrNamespace, layer: w.wlrLayer, order: i, visible: w.visible,
+        x: g.x, y: g.y, w: g.w, h: g.h,
+        color: [Math.round(c.r * 255), Math.round(c.g * 255), Math.round(c.b * 255), Math.round(c.a * 255)] }
+      Qt.callLater(function() {
+        var ok = w.contentItem.grabToImage(function(res) {
+          res.saveToFile(file); console.log("SHOT " + JSON.stringify(meta))
+          if (--harness.pending === 0) Qt.quit()
+        }, Qt.size(Math.max(1, g.w) * @SCALE@, Math.max(1, g.h) * @SCALE@))
+        if (!ok) { console.log("grab failed " + meta.ns); if (--harness.pending === 0) Qt.quit() }
+      })
+    })(wins[i], i)
+  }
+
+  Component.onCompleted: {
+    var out = []
+    for (var i = 0; i < loads.length; i++) {
+      var comp = Qt.createComponent(loads[i].url)
+      if (comp.status !== Component.Ready) { console.log("Error: " + comp.errorString()); Qt.quit(); return }
+      var obj = comp.createObject(harness, {})
+      if ("omarchyPath" in obj) obj.omarchyPath = Quickshell.env("OMARCHY_PATH")
+      if ("shell" in obj) obj.shell = makeShell()
+      if ("barWidgetRegistry" in obj) obj.barWidgetRegistry = { widgets: harness.fakeWidgets }
+      if ("barConfig" in obj) obj.barConfig = { position: "top", layout: { right: ["omarchy.audio", "omarchy.bluetooth", "omarchy.network", "omarchy.power"] } }
+      if (loads[i].open && typeof obj.open === "function") obj.open("")
+      out.push(obj)
+    }
+    plugins = out
+    actTimer.start()
+  }
+}
