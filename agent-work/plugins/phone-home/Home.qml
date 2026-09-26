@@ -209,6 +209,7 @@ Item {
     launching = true
     launchCooldown.restart()
     appLibrary.launch(app.appId, app.label)
+    closeSearch()
   }
 
   // ------------------------------------------------------------------ tile
@@ -357,6 +358,7 @@ Item {
   // the first page, as iOS's home button does. currentIndex rather than a
   // position call, so the page dots follow.
   function open(payloadJson) {
+    closeSearch()
     anchorPage = 0
     pager.currentIndex = 0
   }
@@ -364,6 +366,45 @@ Item {
   // Never closes; see the header. The host may still call this when it hides
   // plugins, and it has nothing to do.
   function close() {}
+
+  // ---------------------------------------------------------------- search
+  //
+  // Swipe down on the home screen, as on iOS: a field at the top, the on-screen
+  // keyboard up, and apps matching as you type. The keyboard is another plugin,
+  // which this one may not summon through the host -- only the bar may -- but
+  // the shell's IPC answers any process, so it goes that way.
+  property bool searching: false
+  property string query: ""
+  readonly property int searchResultLimit: 8
+  readonly property int searchPullDistance: Style.space(56)
+
+  // The library's own search and ranking, the one upstream's menu uses; an
+  // empty query lists apps in its usual order, as iOS's suggestions do.
+  readonly property var results: {
+    if (!searching || !appLibrary) return []
+    var rows = appLibrary.sortedEntries(query)
+    var out = []
+    for (var i = 0; i < rows.length && out.length < searchResultLimit; i++) {
+      var entry = rows[i].entry
+      if (!entry || !entry.id) continue
+      out.push({ appId: String(entry.id), label: appLibrary.entryName(entry), iconName: String(entry.icon || "") })
+    }
+    return out
+  }
+
+  function openSearch() {
+    if (searching) return
+    query = ""
+    searching = true
+    Quickshell.execDetached(["omarchy-shell", "shell", "summon", "dev.omarchyphone.keyboard"])
+  }
+
+  function closeSearch() {
+    if (!searching) return
+    searching = false
+    query = ""
+    Quickshell.execDetached(["omarchy-shell", "shell", "hide", "dev.omarchyphone.keyboard"])
+  }
 
   PanelWindow {
     id: panel
@@ -373,7 +414,10 @@ Item {
 
     WlrLayershell.namespace: "omarchy-phone-home"
     WlrLayershell.layer: WlrLayer.Bottom
-    WlrLayershell.keyboardFocus: WlrKeyboardFocus.None
+    // Keyboard focus only while searching, so the keys the on-screen keyboard
+    // injects land in the search field; the rest of the time the home screen
+    // must never take keys from whatever is focused.
+    WlrLayershell.keyboardFocus: root.searching ? WlrKeyboardFocus.OnDemand : WlrKeyboardFocus.None
 
     // Ignore rather than reserve: this is the backdrop windows tile over, and
     // it must neither push them aside nor be pushed by the bar. The bar's strip
@@ -406,6 +450,17 @@ Item {
       // and a spread built mid-swipe is a dropped frame under the thumb.
       cacheBuffer: width * Math.max(1, root.spreadCount - 1)
       model: root.spreadCount
+      opacity: root.searching ? 0.12 : 1
+      Behavior on opacity { NumberAnimation { duration: 150 } }
+
+      // A swipe down anywhere on the pages opens search. Vertical only, so the
+      // pager keeps its sideways swipe; no target, the pages do not move.
+      DragHandler {
+        target: null
+        xAxis.enabled: false
+        enabled: !root.searching
+        onTranslationChanged: if (active && translation.y > root.searchPullDistance) root.openSearch()
+      }
 
       // Only a swipe moves the anchor; a model reset also changes currentIndex,
       // and that must not overwrite the page being restored.
@@ -505,6 +560,8 @@ Item {
       // Concentric with the end tiles, which sit `inset` from each edge.
       radius: root.tileRadius + inset
       visible: root.dockApps.length > 0
+      opacity: root.searching ? 0.12 : 1
+      Behavior on opacity { NumberAnimation { duration: 150 } }
 
       color: Util.alpha(Color.background, 0.28)
       border.width: Math.max(1, Style.space(1))
@@ -527,6 +584,165 @@ Item {
             showLabel: false
           }
         }
+      }
+    }
+
+    // The search sheet. A tap anywhere off it closes search; the sheet itself
+    // swallows taps that miss a result.
+    MouseArea {
+      anchors.fill: parent
+      visible: root.searching
+      onClicked: root.closeSearch()
+    }
+
+    Rectangle {
+      id: searchSheet
+
+      readonly property int rowHeight: Math.round(root.tileSize * 0.8)
+
+      visible: root.searching
+      anchors.horizontalCenter: parent.horizontalCenter
+      anchors.top: parent.top
+      anchors.topMargin: (root.barAtBottom ? 0 : root.barSpace) + Style.spacing.lg
+      width: Math.min(parent.width - root.pagePadding * 2, Style.space(480))
+      height: searchColumn.implicitHeight + Style.spacing.lg * 2
+      radius: root.tileRadius
+      color: Util.alpha(Color.background, 0.6)
+      border.width: Math.max(1, Style.space(1))
+      border.color: Util.alpha(Color.foreground, 0.18)
+
+      MouseArea { anchors.fill: parent }
+
+      Column {
+        id: searchColumn
+
+        anchors.left: parent.left
+        anchors.right: parent.right
+        anchors.top: parent.top
+        anchors.margins: Style.spacing.lg
+        spacing: Style.spacing.sm
+
+        // The field: a magnifier glyph (Nerd Font f002) and the text.
+        Rectangle {
+          width: parent.width
+          height: searchSheet.rowHeight
+          radius: Math.round(height * 0.3)
+          color: Util.alpha(Color.foreground, 0.1)
+
+          Text {
+            id: magnifier
+            anchors.left: parent.left
+            anchors.leftMargin: Style.spacing.lg
+            anchors.verticalCenter: parent.verticalCenter
+            text: "\uf002"
+            color: Util.alpha(Color.foreground, 0.6)
+            font.family: Style.font.family
+            font.pixelSize: Style.font.body
+          }
+
+          TextInput {
+            id: searchInput
+
+            anchors.left: magnifier.right
+            anchors.leftMargin: Style.spacing.md
+            anchors.right: parent.right
+            anchors.rightMargin: Style.spacing.lg
+            anchors.verticalCenter: parent.verticalCenter
+            color: Color.foreground
+            font.family: Style.font.family
+            font.pixelSize: Style.font.title
+            clip: true
+            onTextChanged: root.query = text
+            // Return opens the first match, as a search field's go key does.
+            onAccepted: if (root.results.length > 0) root.launch(root.results[0])
+
+            Text {
+              anchors.fill: parent
+              verticalAlignment: Text.AlignVCenter
+              visible: searchInput.text.length === 0
+              text: "Search"
+              color: Util.alpha(Color.foreground, 0.45)
+              font: searchInput.font
+            }
+          }
+        }
+
+        Repeater {
+          model: root.results
+
+          delegate: Item {
+            id: result
+
+            required property var modelData
+
+            width: searchColumn.width
+            height: searchSheet.rowHeight
+
+            Rectangle {
+              anchors.fill: parent
+              radius: Math.round(height * 0.3)
+              color: Util.alpha(Color.foreground, resultTap.pressed ? 0.16 : 0)
+            }
+
+            // The same tile as everywhere else, at list size: an app keeps its
+            // one shape in search results too.
+            Rectangle {
+              id: resultIcon
+
+              anchors.left: parent.left
+              anchors.leftMargin: Style.spacing.md
+              anchors.verticalCenter: parent.verticalCenter
+              width: Math.round(parent.height * 0.78)
+              height: width
+              radius: Math.round(width * 0.27)
+              color: Util.alpha(Color.background, 0.32)
+              border.width: Math.max(1, Style.space(1))
+              border.color: Util.alpha(Color.foreground, 0.22)
+
+              Rectangle {
+                anchors.fill: parent
+                radius: parent.radius
+                color: Util.alpha(Color.foreground, 0.08)
+              }
+
+              Image {
+                anchors.centerIn: parent
+                width: Math.round(parent.width * 0.64)
+                height: width
+                sourceSize.width: width
+                sourceSize.height: height
+                fillMode: Image.PreserveAspectFit
+                source: root.appLibrary ? root.appLibrary.iconSource(result.modelData.iconName) : ""
+                asynchronous: true
+              }
+            }
+
+            Text {
+              anchors.left: resultIcon.right
+              anchors.leftMargin: Style.spacing.lg
+              anchors.right: parent.right
+              anchors.verticalCenter: parent.verticalCenter
+              text: result.modelData.label
+              color: Color.foreground
+              font.family: Style.font.family
+              font.pixelSize: Style.font.body
+              elide: Text.ElideRight
+            }
+
+            TapHandler {
+              id: resultTap
+              onTapped: root.launch(result.modelData)
+            }
+          }
+        }
+      }
+
+      // A fresh field each time, and the text cursor in it so the injected
+      // keys have somewhere to go.
+      onVisibleChanged: {
+        if (!visible) return
+        searchInput.text = ""
+        searchInput.forceActiveFocus()
       }
     }
   }
