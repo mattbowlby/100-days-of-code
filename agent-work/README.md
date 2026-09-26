@@ -20,7 +20,7 @@ from the top -- with every app on the same frosted rounded-square tile, and
 Omarchy's see-through surfaces over a blur instead of Apple's liquid glass.
 It follows the active Omarchy theme, light or dark. On an unfolded foldable
 (shortest side 600 logical px or more) the home screen opens as two pages side
-by side. `previews/` has renders at each size.
+by side once there is more than one page of apps. `previews/` has renders at each size.
 
 ## Shape
 

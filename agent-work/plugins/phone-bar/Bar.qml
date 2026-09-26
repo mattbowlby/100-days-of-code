@@ -346,11 +346,13 @@ Item {
   // row configured in shell.json must list them too for their tiles to show.
   // Actions run a command; every one is an existing Omarchy tool. There is no
   // Lock tile: Omarchy's lock asks for a typed password that a phone with no
-  // hardware keyboard cannot enter (config/hypr/bindings.lua, NOTES.md).
+  // hardware keyboard cannot enter (config/hypr/bindings.lua, NOTES.md). Nor a
+  // Stay Awake one: stay-awake only pauses the idle lock and screensaver, and
+  // the installer has already pushed both out of reach, so it would do nothing.
   //
   // Glyphs are Nerd Font codepoints on the default family, written as escapes
   // and checked by rendering them (NOTES.md): f1eb wifi, f293 bluetooth, f028
-  // volume, f240 battery, f108 display, f030 camera, f186 moon, f0f4 cup.
+  // volume, f240 battery, f108 display, f030 camera, f186 moon.
   readonly property var controlTiles: [
     { panel: "omarchy.network",   icon: "\uf1eb", label: "Network" },
     { panel: "omarchy.bluetooth", icon: "\uf293", label: "Bluetooth" },
@@ -358,8 +360,7 @@ Item {
     { panel: "omarchy.power",     icon: "\uf240", label: "Battery" },
     { panel: "omarchy.monitor",   icon: "\uf108", label: "Display" },
     { command: ["omarchy-capture-screenshot", "fullscreen", "save"],  icon: "\uf030", label: "Screenshot" },
-    { command: ["omarchy-toggle-nightlight"],                         icon: "\uf186", label: "Night Light" },
-    { command: ["omarchy-toggle-idle"],                               icon: "\uf0f4", label: "Stay Awake" }
+    { command: ["omarchy-toggle-nightlight"],                         icon: "\uf186", label: "Night Light" }
   ]
 
   readonly property var visibleControlTiles: {

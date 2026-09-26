@@ -1,9 +1,10 @@
 # Which phones this can run on
 
 The shell in this repo, meaning the home screen, bar and control centre,
-works at any screen size. It already lays itself out for a 375x667 iPhone SE
+is laid out for any screen size. It already lays itself out for a 375x667 iPhone SE
 2-sized panel, a 360-412px-wide Samsung, a Galaxy Z Fold cover screen, and the
-Fold's unfolded inner screen, where it shows two pages side by side. What limits
+Fold's unfolded inner screen, where it shows two pages side by side once
+there is more than one page of apps. What limits
 where it runs is not the shell. It is whether a phone can boot Linux at all.
 
 Installing this port means replacing the phone's operating system. That needs
@@ -33,9 +34,10 @@ Checked in September 2026.
   months of work per device, and only worth doing once the bootloader question
   has an answer.
 - **A different phone.** Many devices that can already boot postmarketOS are
-  cheap second-hand and run this port: the OnePlus 6/6T, Pixel 3a, Xiaomi Poco
-  F1 and SHIFT6mq among them. Every layout in this repo already fits their
-  screens.
+  cheap second-hand: the OnePlus 6/6T, Pixel 3a, Xiaomi Poco F1 and SHIFT6mq
+  among them. They could run this port once each has a device profile in
+  `install/devices/` (only the 6T has one so far; none has been tested). Every
+  layout in this repo already fits their screens.
 
 ## Sources
 
