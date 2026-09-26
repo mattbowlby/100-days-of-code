@@ -45,10 +45,18 @@ def main():
     shutil.copytree(HERE / "stubs", stubs)
     (stubs / "qs").mkdir()
     (stubs / "qs" / "Commons").symlink_to(OMARCHY / "shell" / "Commons")
+    # Ui/ for upstream's own widgets (BackgroundMedia, for the lock screen).
+    (stubs / "qs" / "Ui").symlink_to(OMARCHY / "shell" / "Ui")
     home = work / "home"; theme = home / ".local/state/omarchy/current/theme"
     theme.mkdir(parents=True, exist_ok=True)
     shutil.copy(OMARCHY / "themes" / a.theme / "colors.toml", theme / "colors.toml")
-    env = {"HOME": str(home), "OMARCHY_PATH": str(OMARCHY), "PREVIEW_W": a.w, "PREVIEW_H": a.h, "TOPLEVELS": os.environ.get("TOPLEVELS", "")}
+    # The wallpaper as a PNG too, for surfaces that draw it themselves (the
+    # lock screen): this Qt may have no WebP plugin, where Pillow does.
+    wp = pathlib.Path(a.wallpaper) if a.wallpaper else sorted((OMARCHY / "themes" / a.theme / "backgrounds").iterdir())[0]
+    wp_png = work / "wallpaper.png"
+    Image.open(wp).convert("RGB").save(wp_png)
+    env = {"HOME": str(home), "OMARCHY_PATH": str(OMARCHY), "PREVIEW_W": a.w, "PREVIEW_H": a.h,
+           "TOPLEVELS": os.environ.get("TOPLEVELS", ""), "PREVIEW_WALLPAPER": str(wp_png)}
     (stubs / "Quickshell/PreviewEnv.qml").write_text(
         "pragma Singleton\nimport QtQuick\nQtObject { property var values: %s }\n" % json.dumps(env))
 
@@ -86,7 +94,6 @@ def main():
         print(log); sys.exit(1)
 
     S = a.scale; W, H = a.w * S, a.h * S
-    wp = pathlib.Path(a.wallpaper) if a.wallpaper else sorted((OMARCHY / "themes" / a.theme / "backgrounds").iterdir())[0]
     canvas = Image.open(wp).convert("RGBA")
     k = max(W / canvas.width, H / canvas.height)
     canvas = canvas.resize((round(canvas.width * k), round(canvas.height * k)), Image.LANCZOS)

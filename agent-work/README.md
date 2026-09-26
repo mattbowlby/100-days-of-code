@@ -16,8 +16,8 @@ current Samsung.
 ## The look
 
 iOS's layout -- pages of apps, a dock, page dots, a control centre that drops
-from the top, a search that drops from the home screen, notification banners
--- with every app on the same frosted rounded-square tile, and
+from the top, a search that drops from the home screen, notification banners,
+a lock screen with a passcode pad -- with every app on the same frosted rounded-square tile, and
 Omarchy's see-through surfaces over a blur instead of Apple's liquid glass.
 It follows the active Omarchy theme, light or dark. On an unfolded foldable
 (shortest side 600 logical px or more) the home screen opens as two pages side
@@ -39,6 +39,9 @@ plugins/         shell plugins, installed to ~/.config/omarchy/plugins
   phone-notifications  notification banners: Omarchy's notification service
                      with its toasts swapped for Banners.qml, built on the
                      phone by omarchy-phone-notifications-build
+  phone-lock         lock screen: Omarchy's lock service with its view
+                     swapped for LockView.qml (the time, then a passcode
+                     pad), built on the phone by omarchy-phone-lock-build
 bin/             omarchy-phone-* tools
 install/         device bring-up fragments
 ```
@@ -103,6 +106,7 @@ plugin directory of the same name is never destroyed.
 | `omarchy-phone-diagnose` | read-only report: device, session modules, plugins, lint, running shell |
 | `omarchy-phone-install` | install the session; dry run unless `--apply` |
 | `omarchy-phone-plugins-link` | link/unlink the shell plugins for development |
+| `omarchy-phone-lock-build` | build the lock screen from the installed Omarchy's lock service (`--clean` removes the build) |
 | `omarchy-phone-notifications-build` | build the banners from the installed Omarchy's notification service (`--clean` removes the build) |
 | `omarchy-phone-lint-qml` | qmllint with the `qs` module path and Quickshell's false positives handled |
 | `omarchy-phone-cellular` | modem status/control via mmcli; the one tool with no upstream ancestor |

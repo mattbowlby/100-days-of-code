@@ -464,7 +464,7 @@ Item {
   // -- which is why audio and monitor are in the default row above, and why a
   // row configured in shell.json must list them too for their tiles to show.
   // Actions run a command; every one is an existing Omarchy tool. The Lock
-  // tile is the exception, and opt-in: see "lock" below. There is no Stay
+  // tile shows only with the phone's own lock screen: see "lock" below. There is no Stay
   // Awake tile: stay-awake only pauses the idle lock and screensaver, and
   // the installer has already pushed both out of reach, so it would do nothing.
   //
@@ -501,6 +501,7 @@ Item {
     closeSwitcher()
     // One sheet at a time: a panel the sheet opened earlier closes first.
     if (activePopout) requestPopout(null)
+    checkLock()
     controlOpen = true
   }
 
@@ -538,72 +539,39 @@ Item {
 
   // ------------------------------------------------------------------- lock
   //
-  // Omarchy's own lock, with the on-screen keyboard summoned over it. The lock
-  // asks for a typed password and keeps keyboard focus on its surface; the
-  // keyboard is drawn and touchable above a session lock by the above_lock
-  // layer rule in config/hypr/looknfeel.lua, and the keys it injects go to the
-  // focused surface -- the password field.
-  //
-  // Opt-in, by creating the file below, until it has been seen working on a
-  // phone. A lock whose keyboard does not come up is one the phone cannot
-  // leave short of forcing it off (NOTES.md). The power button and the idle
-  // timer stay lock-free for the same reason.
-  readonly property string keyboardId: "dev.omarchyphone.keyboard"
-  readonly property string lockOptInFile:
-    (Quickshell.env("XDG_CONFIG_HOME") || (Quickshell.env("HOME") + "/.config"))
-    + "/omarchy-phone/lock-with-keyboard"
+  // The phone's own lock screen (phone-lock): the time, then a passcode pad,
+  // so the phone unlocks by touch. The tile shows only while that lock is the
+  // one in use -- Omarchy's own asks for a typed password with nothing on
+  // screen to type it on -- which the shell is asked each time the control
+  // centre opens. The power button and the idle timer stay lock-free until the
+  // phone lock has been seen working on a phone (PROGRESS.md).
+  readonly property string phoneLockId: "dev.omarchyphone.lock"
   property bool lockEnabled: false
-
-  FileView {
-    path: root.lockOptInFile
-    watchChanges: true
-    printErrors: false
-    onLoaded: root.lockEnabled = true
-    onLoadFailed: root.lockEnabled = false
-    onFileChanged: reload()
-  }
 
   function lockPhone() {
     Util.execArgv(["omarchy-system-lock"])
-    if (shell && typeof shell.summon === "function") shell.summon(keyboardId, "")
-    lockSeen = false
-    lockChecks = 0
-    lockWatch.restart()
   }
 
-  // The lock announces nothing when it lifts, so it is asked, and the keyboard
-  // put away once it has -- but only once the lock has been seen up. The lock
-  // is started out of process and can take longer than one interval to engage
-  // on a slow phone; an early "false" is "not yet", and hiding the keyboard on
-  // it would leave the lock coming up with nothing to type on. A lock that
-  // never comes (no PAM file, a failure) is given up on after a few checks.
-  property bool lockSeen: false
-  property int lockChecks: 0
-  readonly property int lockCheckLimit: 5
-
-  Timer {
-    id: lockWatch
-    interval: 2000
-    repeat: true
-    onTriggered: if (!lockQuery.running) lockQuery.running = true
+  function checkLock() {
+    if (!lockCheck.running) lockCheck.running = true
   }
 
-  function finishLockWatch() {
-    lockWatch.stop()
-    if (shell && typeof shell.hide === "function") shell.hide(keyboardId)
-  }
+  Component.onCompleted: checkLock()
 
   Process {
-    id: lockQuery
-    command: ["omarchy-shell", "lock", "isLocked"]
+    id: lockCheck
+    command: ["omarchy-shell", "shell", "listPlugins"]
     stdout: StdioCollector {
       onStreamFinished: {
-        root.lockChecks++
-        if (text.trim() === "true") {
-          root.lockSeen = true
-          return
+        var inUse = false
+        try {
+          var plugins = JSON.parse(text)
+          for (var i = 0; i < plugins.length; i++)
+            if (plugins[i].id === root.phoneLockId && plugins[i].enabled === true) inUse = true
+        } catch (e) {
+          // No answer is not an answer of yes: the tile stays away.
         }
-        if (root.lockSeen || root.lockChecks >= root.lockCheckLimit) root.finishLockWatch()
+        root.lockEnabled = inUse
       }
     }
   }

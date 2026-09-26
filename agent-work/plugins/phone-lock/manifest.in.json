@@ -1,0 +1,6 @@
+{
+  "id": "dev.omarchyphone.lock",
+  "name": "Phone Lock Screen",
+  "author": "Omarchy Phone",
+  "description": "Omarchy's lock service with an iOS-style lock screen and passcode pad; built by bin/omarchy-phone-lock-build."
+}

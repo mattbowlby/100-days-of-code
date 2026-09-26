@@ -56,6 +56,9 @@ for target in "${targets[@]}"; do
     while IFS= read -r -d '' file; do
       case $file in
       */phone-notifications/Service.qml | */phone-notifications/components/*) continue ;;
+      # phone-lock: all but LockView.qml is upstream's, copied in likewise.
+      */phone-lock/LockView.qml) ;;
+      */phone-lock/*) continue ;;
       */phone-notifications/Banners.qml)
         if [[ ! -f ${file%/*}/NotificationLogic.js ]]; then
           echo "skipped $file: not built (omarchy-phone-notifications-build)"

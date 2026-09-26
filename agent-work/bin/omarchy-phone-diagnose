@@ -51,9 +51,10 @@ shopt -s nullglob
 for dir in "$OMARCHY_PHONE_PATH"/plugins/*/; do
   name=$(basename "$dir")
   manifest="$dir/manifest.json"
-  # phone-notifications is built on the phone, from the Omarchy installed there.
+  # phone-notifications and phone-lock are built on the phone, from the
+  # Omarchy installed there.
   if [[ ! -f $manifest && -f $dir/manifest.in.json ]]; then
-    no "$name is not built (omarchy-phone-notifications-build); Omarchy's own notifications are used"
+    no "$name is not built (omarchy-phone-${name#phone-}-build); Omarchy's own is used"
     continue
   fi
   [[ -f $manifest ]] || { no "$name has no manifest.json"; continue; }
@@ -117,23 +118,28 @@ if [[ -r $SHELL_CONFIG ]]; then
 fi
 shopt -u nullglob
 
-# Exactly one notification service: the banners with the built-in off, or the
-# built-in on its own. Both on is two servers fighting over the bus name; both
-# off is a phone that never shows a notification.
+# Exactly one of each stand-in's pair in use: the phone's with the built-in
+# off, or the built-in on its own. Both on is two notification servers
+# fighting over the bus name, or two session locks; both off is a phone that
+# never shows a notification, or cannot lock.
 if [[ -r $SHELL_CONFIG ]]; then
-  builtin_off=$(jq -r '(.disabledPlugins // []) | index("omarchy.notifications") != null' "$SHELL_CONFIG" 2>/dev/null)
-  banners_on=$(jq -r '(.plugins // []) | any(.id == "dev.omarchyphone.notifications")' "$SHELL_CONFIG" 2>/dev/null)
-  # Built, and linked from this checkout (the installer's test).
-  [[ -f $OMARCHY_PHONE_PATH/plugins/phone-notifications/manifest.json ]] \
-    && [[ $(readlink -f "$PLUGINS_DIR/phone-notifications") \
-      == "$(readlink -f "$OMARCHY_PHONE_PATH/plugins/phone-notifications")" ]] \
-    || banners_on=false
-  case "$banners_on/$builtin_off" in
-  true/true) ok "notifications: the phone's banners (omarchy.notifications off)" ;;
-  false/false) ok "notifications: Omarchy's own toasts (banners not in use)" ;;
-  true/false) no "notifications: banners AND omarchy.notifications both on (re-run omarchy-phone-install --apply)" ;;
-  *) no "notifications: none -- omarchy.notifications is off and the banners are not in use (re-run omarchy-phone-install --apply)" ;;
-  esac
+  for pair in notifications:omarchy.notifications:dev.omarchyphone.notifications \
+    lock:omarchy.lock:dev.omarchyphone.lock; do
+    IFS=: read -r what builtin ours <<<"$pair"
+    builtin_off=$(jq -r --arg id "$builtin" '(.disabledPlugins // []) | index($id) != null' "$SHELL_CONFIG" 2>/dev/null)
+    ours_on=$(jq -r --arg id "$ours" '(.plugins // []) | any(.id == $id)' "$SHELL_CONFIG" 2>/dev/null)
+    # Built, and linked from this checkout (the installer's test).
+    [[ -f $OMARCHY_PHONE_PATH/plugins/phone-$what/manifest.json ]] \
+      && [[ $(readlink -f "$PLUGINS_DIR/phone-$what") \
+        == "$(readlink -f "$OMARCHY_PHONE_PATH/plugins/phone-$what")" ]] \
+      || ours_on=false
+    case "$ours_on/$builtin_off" in
+    true/true) ok "$what: the phone's own ($builtin off)" ;;
+    false/false) ok "$what: Omarchy's own (the phone's not in use)" ;;
+    true/false) no "$what: the phone's AND $builtin both on (re-run omarchy-phone-install --apply)" ;;
+    *) no "$what: none -- $builtin is off and the phone's is not in use (re-run omarchy-phone-install --apply)" ;;
+    esac
+  done
 fi
 
 DOCK_FILE="${XDG_CONFIG_HOME:-$HOME/.config}/omarchy-phone/dock"

@@ -1,0 +1,6 @@
+# Everything here but these is written by bin/omarchy-phone-lock-build from
+# the installed Omarchy.
+/*
+!/.gitignore
+!/LockView.qml
+!/manifest.in.json

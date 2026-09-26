@@ -3,6 +3,61 @@
 Pushed to `agent-work/` on branch `claude/nifty-hamilton-ezxf50` at least once an
 hour while work is going on. Newest entry first.
 
+## 2026-09-26 (night): the phone's own lock screen
+
+- **An iOS-style lock screen.** It opens on the time and date over your
+  blurred wallpaper. Swipe up (or tap) for the passcode page: "Enter
+  Passcode", a dot for each digit you type, and round number keys with their
+  letters under them, as on an iPhone. Enter (the key right of 0) unlocks.
+  Delete and Cancel sit under the pad; after a few seconds untouched it goes
+  back to the time.
+- **Your passcode is your Linux password.** If it is all digits, the number
+  pad is all you need, like a phone PIN. If it has letters or symbols, tap
+  ABC for a letter keyboard (and #+= on it for symbols). A keyboard plugged in
+  or paired works on both pages.
+- **Wrong passcodes**: the dots shake and the reason shows above them. After a
+  few wrong tries in a row the system makes you wait a while before trying
+  again, as the desktop lock does.
+- **Everything else is Omarchy's own lock**, unchanged (fingerprint unlock
+  too, where a sensor is set up). The installer builds it from the Omarchy on
+  the phone and switches Omarchy's desktop lock off; if the build fails,
+  Omarchy's own lock stays on instead, and the Lock tile stays hidden.
+- **The Lock tile** in the control centre now uses it, and shows only while
+  the phone's lock screen is the one in use.
+- **The phone still never locks by itself**: not when idle, not with the power
+  button, not when it suspends. That comes once this has been checked on a
+  phone.
+- **The keyboard-over-the-lock workaround is gone**, and with it the setting
+  that let the on-screen keyboard draw above a locked screen.
+- Previews: `previews/12-lock-time.png` and `previews/12-lock-passcode.png`.
+
+**NEEDS HARDWARE: check this on the phone before relying on it.** It has not
+run on a phone yet.
+
+1. Attach a hardware keyboard first (USB-C, or Bluetooth already paired), so
+   the password can be typed if the touch pad fails.
+2. Run `omarchy-phone-diagnose`. It must say "lock: the phone's own".
+   `omarchy-shell lock status` must show `"passwordPam":true`.
+3. Swipe down from the top and tap Lock.
+4. Check all five:
+   - the time shows, and swiping up brings the passcode page
+   - tapping number keys adds dots; Delete removes one
+   - a wrong passcode shakes the dots and says so
+   - the right passcode and Enter unlock
+   - with the screen gone dark after a few seconds, a tap wakes it
+5. Only then use it without a hardware keyboard.
+
+**If the passcode page does not work:**
+
+- Type the password on the hardware keyboard and press Enter.
+- Without one, hold the power button to force the phone off and boot it
+  again; the lock does not survive a reboot.
+- Then run `omarchy-phone-lock-build --clean` and `omarchy-phone-install
+  --apply` to go back to Omarchy's own lock (the Lock tile then hides).
+
+Restarting the shell over SSH does not help, because the lock takes a stranded
+lock back on start.
+
 ## 2026-09-26 (evening): notification banners
 
 - **Notifications now drop in as iOS-style banners** at the top of the
@@ -47,41 +102,9 @@ hour while work is going on. Newest entry first.
   cancels. The window stills are untested: the preview cannot capture windows.
 - **Keystrokes are typed in order, and never appear in a process list.** One
   queue, one wtype at a time, text passed on stdin.
-- **Opt-in Lock tile.**
-  - To enable it:
-    `mkdir -p ~/.config/omarchy-phone && echo 1 > ~/.config/omarchy-phone/lock-with-keyboard`.
-    A Lock tile then appears in the control centre. Write something into the
-    file; an empty one may not be picked up.
-  - It locks with Omarchy's password lock and brings the on-screen keyboard
-    up over it. The keyboard goes away by itself a few seconds after
-    unlocking.
-  - Auto-lock, lock-on-suspend and the power button still never lock.
-
-**NEEDS HARDWARE: check this on the phone before relying on it.** It has not
-run on a phone yet.
-
-1. Attach a hardware keyboard first (USB-C, or Bluetooth already paired), so
-   the password can be typed if the test fails.
-2. Run `hyprctl configerrors`. It must print no error text, because an older
-   Hyprland without `above_lock` would reject the rule.
-   `omarchy-shell lock status` must show `"passwordPam":true`.
-3. Enable the tile (above), swipe down, and tap Lock.
-4. Check all four:
-   - the keyboard is drawn over the lock screen
-   - tapping keys puts dots in the password field
-   - enter unlocks
-   - the keyboard disappears within a few seconds
-5. Only then use it without a hardware keyboard.
-
-**If the keyboard does not appear over the lock:**
-
-- Type the password on the hardware keyboard.
-- Without one, hold the power button to force the phone off and boot it
-  again; the lock does not survive a reboot.
-- Then run `rm ~/.config/omarchy-phone/lock-with-keyboard` to hide the tile.
-
-Restarting the shell over SSH does not help, because Omarchy's lock takes a
-stranded lock back on start.
+- **Opt-in Lock tile** (the on-screen keyboard over Omarchy's password lock):
+  replaced by the phone's own lock screen, see the newer entry. The
+  `lock-with-keyboard` file does nothing now and can be deleted.
 
 ## 2026-09-26: home screen, control centre, see-through look
 
@@ -153,7 +176,7 @@ phone. See the next entry for the opt-in lock.
 - **Nothing has run on a real phone.** The renders come from an offscreen
   harness with Quickshell stubbed out, not from the real shell.
 - **Missing iOS pieces:** a lock screen with its own keypad, and
-  notifications (added in a later entry).
+  notifications (both added in later entries).
 
 ## Can it be flashed onto the phones asked for?
 

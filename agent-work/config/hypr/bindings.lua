@@ -14,11 +14,11 @@
 -- reading. On a phone a short press means "screen off"; long press belongs to
 -- logind, which install/hardware/power-key.sh configures.
 --
--- Screen off, and NOT locked -- for now. Omarchy's lock screen asks for a
--- typed password; the on-screen keyboard is drawn over it by an above_lock
--- layer rule (looknfeel.lua), but that is not yet proven on a phone, and a lock
--- it cannot type into could be left only by forcing the phone off (NOTES.md).
--- The opt-in Lock tile is the one way to lock until it is.
+-- Screen off, and NOT locked -- for now. The phone's lock screen (phone-lock)
+-- unlocks by touch, with a passcode pad, but has not yet been seen working on
+-- a phone, and a lock that cannot be unlocked can be left only by forcing the
+-- phone off (NOTES.md). The control centre's Lock tile is the one way to lock
+-- until it has.
 --
 -- Off only from on, and only once the button is let go. Hyprland runs a key's
 -- binds first and then, for the same event -- press and release alike -- wakes

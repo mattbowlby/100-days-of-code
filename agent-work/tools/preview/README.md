@@ -70,3 +70,21 @@ tools/preview/render.py --plugin plugins/phone-bar:Bar.qml \
   --plugin plugins/phone-home:Home.qml --plugin "$dir":NotificationsPreview.qml \
   --w 360 --h 780 --scale 3 --theme tokyo-night --out /tmp/banners.png
 ```
+
+### Lock screen
+
+`LockView.qml` is drawn inside a session lock, which the harness cannot make.
+`fixtures/LockPreview.qml` puts it on a full-screen panel instead, over the
+harness's wallpaper (written as a PNG for it, in `PREVIEW_WALLPAPER`), and
+echoes typing back as the lock service would. Drive it with `--actions`:
+
+```bash
+bin/omarchy-phone-lock-build
+dir=$(mktemp -d) && cp -a plugins/phone-lock/. tools/preview/fixtures/LockPreview.qml "$dir"/
+tools/preview/render.py --plugin "$dir":LockPreview.qml --w 360 --h 780 --scale 3 \
+  --theme tokyo-night --blur none \
+  --actions 'plugins[0].view.showPasscode(); plugins[0].view.type("1")' --out /tmp/lock.png
+```
+
+The wallpaper comes out sharp: the lock blurs it with a `MultiEffect`, which
+the software renderer does not draw.

@@ -1,0 +1,127 @@
+#!/bin/bash
+
+# omarchy:summary=Build the phone's lock screen from Omarchy's own lock service.
+# omarchy:args=[--clean]
+# omarchy:examples=omarchy-phone-lock-build
+
+# The phone's lock is Omarchy's lock service -- PAM, fingerprint, blanking,
+# stranded-lock recovery, all of it -- with only its view (LockView.qml, the
+# password field) replaced by the phone's: the time, then a passcode pad. Made
+# as `omarchy plugin clone` makes a clone, marked clonedFrom omarchy.lock, so
+# the shell grants it the lock's authentication capability and routes the
+# lock's calls to it.
+#
+# Everything but LockView.qml is copied from the Omarchy installed here, at
+# build time, so the service always matches the shell that runs it. The copy
+# lands in plugins/phone-lock/ and is not committed (see its .gitignore).
+# Re-run this after an Omarchy update.
+
+set -euo pipefail
+
+OMARCHY_PHONE_PATH="${OMARCHY_PHONE_PATH:-$(dirname "$(dirname "$(readlink -f "$0")")")}"
+OMARCHY_PATH="${OMARCHY_PATH:-/usr/share/omarchy}"
+SOURCE="$OMARCHY_PATH/shell/plugins/lock"
+TARGET="$OMARCHY_PHONE_PATH/plugins/phone-lock"
+# What the last build copied in, one name per line, so --clean and a rebuild
+# remove exactly that and never the phone's own files.
+LIST="$TARGET/.generated"
+
+say() { echo "omarchy-phone-lock-build: $*" >&2; }
+
+# manifest.json goes first: the link script and the installer take a plugin
+# directory without one as not there, so from the first file removed until a
+# build completes, Omarchy's own lock stays in charge.
+clean() {
+  local name
+  rm -f -- "$TARGET/manifest.json" "$TARGET/manifest.json.tmp"
+  if [[ -f $LIST ]]; then
+    while IFS= read -r name; do
+      [[ -n $name && $name != */* && $name != LockView.qml && $name != manifest.in.json ]] || continue
+      rm -rf -- "${TARGET:?}/$name"
+    done <"$LIST"
+    rm -f -- "$LIST"
+  fi
+}
+
+fail() {
+  say "$*"
+  clean
+  exit 1
+}
+
+case ${1:-} in
+"") ;;
+--clean)
+  clean
+  exit 0
+  ;;
+*)
+  echo "usage: omarchy-phone-lock-build [--clean]" >&2
+  exit 1
+  ;;
+esac
+
+for file in manifest.json Service.qml LockView.qml; do
+  [[ -f $SOURCE/$file ]] || { say "no $SOURCE/$file"; exit 1; }
+done
+[[ -f $TARGET/LockView.qml && -f $TARGET/manifest.in.json ]] || { say "$TARGET is incomplete"; exit 1; }
+
+# The service drives its view through the properties it sets and the signals
+# it handles on every `LockView {` it declares. Each must be declared by the
+# phone's view: one the view lacks is a QML error, and the service would not
+# load -- no lock at all. Upstream's view offers nothing else the service uses
+# (no calls into it by id), which is checked too.
+mapfile -t wanted < <(awk '
+  /^[[:space:]]*LockView \{[[:space:]]*$/ { depth = 1; next }
+  depth > 0 {
+    line = $0
+    if (depth == 1 && match(line, /^[[:space:]]*[A-Za-z_][A-Za-z0-9_]*:/)) {
+      name = substr(line, RSTART, RLENGTH - 1); gsub(/[[:space:]]/, "", name)
+      if (name != "id" && name != "objectName") print name
+    }
+    opens = gsub(/\{/, "{", line); closes = gsub(/\}/, "}", line)
+    depth += opens - closes
+  }
+' "$SOURCE/Service.qml" | sort -u)
+((${#wanted[@]} > 0)) || fail "found no LockView in $SOURCE/Service.qml; not built"
+
+for name in "${wanted[@]}"; do
+  if [[ $name =~ ^on([A-Z])(.*)$ ]]; then
+    signal="${BASH_REMATCH[1],}${BASH_REMATCH[2]}"
+    grep -Eq "^[[:space:]]*signal[[:space:]]+$signal\(" "$TARGET/LockView.qml" \
+      || fail "the lock service handles signal '$signal', which the phone's LockView.qml lacks; not built"
+  else
+    grep -Eq "^[[:space:]]*(readonly[[:space:]]+)?property[[:space:]]+[A-Za-z]+[[:space:]]+$name\b" "$TARGET/LockView.qml" \
+      || fail "the lock service sets '$name', which the phone's LockView.qml lacks; not built"
+  fi
+done
+
+view_ids=$(awk '/^[[:space:]]*LockView \{/ { getline; if (match($0, /id: [A-Za-z_]+/)) print substr($0, RSTART + 4, RLENGTH - 4) }' "$SOURCE/Service.qml")
+for view_id in $view_ids; do
+  ! grep -Eq "\b$view_id\.[a-z]" "$SOURCE/Service.qml" \
+    || fail "the lock service calls into its view ($view_id.*); the phone's view is not checked for that; not built"
+done
+
+clean
+
+# Every file of upstream's lock but its view and manifest, recorded as copied.
+: >"$LIST"
+for path in "$SOURCE"/* "$SOURCE"/.[!.]*; do
+  [[ -e $path ]] || continue
+  name=${path##*/}
+  case $name in
+  LockView.qml | manifest.json) continue ;;
+  manifest.in.json | .generated | .gitignore) fail "upstream's lock has a file named $name; not built" ;;
+  esac
+  echo "$name" >>"$LIST"
+  cp -a "$path" "$TARGET/$name"
+done
+
+# The lock's own id, kinds, capabilities and entry points, with ours on top.
+jq -s '.[0] as $source | .[1] as $ours
+    | ($source * $ours) | .omarchy.clonedFrom = $source.id' \
+  "$SOURCE/manifest.json" "$TARGET/manifest.in.json" >"$TARGET/manifest.json.tmp" \
+  || fail "could not write manifest.json"
+mv "$TARGET/manifest.json.tmp" "$TARGET/manifest.json"
+
+echo "built $(jq -r .id "$TARGET/manifest.json") from $SOURCE"

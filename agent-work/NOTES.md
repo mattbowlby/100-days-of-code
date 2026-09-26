@@ -125,43 +125,48 @@ The kinds in use upstream: `bar`, `bar-widget`, `service`, `overlay`, `panel`,
 The plugins as built: `dev.omarchyphone.bar` (kind `bar`, and host of the edge
 gestures and control centre), `dev.omarchyphone.home` (kinds `overlay` +
 `menu`, `keepLoaded`), `dev.omarchyphone.keyboard` (`overlay` + `bar-widget`).
-A PIN-pad phone lock is still to come. Omarchy's lock (`plugins/lock`) asks
-for a typed password and keeps keyboard focus on its password field. The phone
-keyboard can type into it: the layer rule `above_lock = 2` on
-`omarchy-phone-keyboard` (`config/hypr/looknfeel.lua`) draws it above a session
-lock and lets it take touches, and the keys wtype injects go to the focused
-surface. Keystrokes go through one queue, in order, with text on stdin rather
-than argv (`phone-keyboard/Keyboard.qml`): arguments are world-readable, and a
-scrambled password is a failed unlock that pam_faillock counts.
+`dev.omarchyphone.notifications` and `dev.omarchyphone.lock` (both `service`)
+are built on the phone from Omarchy's own plugins; see "A built-in can be
+replaced by a clone of it" below.
 
-The **Lock tile** runs `omarchy-system-lock`, summons the keyboard, then asks
-`omarchy-shell lock isLocked` every 2 s and hides the keyboard once the lock has
-been seen up and then gone (or after five checks if it never came). The tile is
-**opt-in**: it shows only while `~/.config/omarchy-phone/lock-with-keyboard`
-exists. It stays opt-in until seen working on a phone, because a lock whose
-keyboard does not come up cannot be left short of forcing the phone off. For
-the same reason the power button only blanks the panel
+**The lock.** Omarchy's lock (`plugins/lock`) asks for a typed password, and a
+phone has nothing to type it on. `plugins/phone-lock` is that same lock
+service, copied from the installed Omarchy by `bin/omarchy-phone-lock-build`,
+with only `LockView.qml` replaced: iOS's time page, then a passcode page with
+a round-key number pad and, behind ABC, letters and symbols. The pad draws
+inside the `WlSessionLockSurface`, so it needs no layer above the lock and
+nothing else can pose as it. The passcode is the user's password, checked by
+the same PAM stack (`/etc/pam.d/omarchy-lock-password`); a numeric password
+makes it a PIN. pam_faillock still counts failures, so a few wrong passcodes
+in a row lock the account for a while, as they do at the desktop lock.
+
+The view is the only part replaced, and its contract with the service is the
+properties the service sets and the signals it handles on each `LockView {`.
+The build reads that list out of upstream's `Service.qml` and refuses when the
+phone's view lacks any of them (a missing one would be a QML error, and the
+service would not load at all), or when the service starts calling into its
+view by id.
+
+The **Lock tile** runs `omarchy-system-lock`. It shows only while
+`dev.omarchyphone.lock` is enabled, which the bar asks
+`omarchy-shell shell listPlugins` each time the control centre opens: with
+Omarchy's own lock in charge a lock could not be left without a hardware
+keyboard. Until the phone lock has been seen working on a phone, the tile is
+the only way it locks: the power button only blanks the panel
 (`config/hypr/bindings.lua`), the installer pushes the idle lock and
 screensaver out to ~23 days (the idle service's only other "off" is the
 stay-awake marker, which a user could toggle back), and it masks
 `omarchy-sleep-lock.service`, which locks on every suspend -- and a phone
-suspends when a cover's or fold's hall sensor reports as a lid. It cannot be a
-bar feature proper: `barPluginMayControl` refuses authentication services, so
-the tile goes through the same command a user would run. Also still missing:
-blanking the panel after idle, which upstream only does as part of locking.
+suspends when a cover's or fold's hall sensor reports as a lid. The tile
+cannot be a bar feature proper: `barPluginMayControl` refuses authentication
+services, so it goes through the same command a user would run. Also still
+missing: blanking the panel after idle, which upstream only does as part of
+locking.
 
-One rough edge: Omarchy's lock blanks the panel 5 s after locking and after
-each wake, and the keyboard above it stays touchable while the panel is dark.
-A tap low on a dark screen can therefore type a stray character before it
-wakes the panel; a tap higher up wakes it through the lock's own surface.
-
-**A risk this carries:** Hyprland layer rules match on namespace only, and any
-client may name its layer surface `omarchy-phone-keyboard`. An app already
-running as the user could draw a fake keyboard above the lock and record the
-taps -- the password. It could not take keyboard focus or unlock anything, and
-such an app could equally edit `~/.config/hypr`; but it is why the rule names
-exactly one namespace, and why a lock that draws its own keypad inside the
-`WlSessionLockSurface` is the real fix, after which this rule goes.
+An earlier version drew the on-screen keyboard above Omarchy's own lock with
+an `above_lock = 2` layer rule. That rule matched on namespace alone, so any
+client naming its surface `omarchy-phone-keyboard` could have drawn above the
+lock too; the pad inside the lock surface retired it.
 
 ### Two host rules the layout of the plugins follows
 

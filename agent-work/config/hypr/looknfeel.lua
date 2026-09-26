@@ -65,17 +65,3 @@ hl.layer_rule({
 -- the browser is the app most often open. Loaded after upstream's rules, and a
 -- later matching rule wins, so this is the last word.
 o.window(".*", { opacity = "1 1" })
-
--- The on-screen keyboard is drawn -- and takes touches -- above a session lock
--- (2 is "render and interact"; 1 would only draw it). Omarchy's lock asks for
--- a typed password, the lock surface keeps keyboard focus, and the keys this
--- keyboard injects go to the focused surface: so this is what lets a phone with
--- no hardware keyboard unlock. Only this one namespace: anything else above
--- the lock would be readable and usable by whoever holds the phone. Rules
--- match on namespace alone, so any client naming its surface this could draw
--- above the lock too (NOTES.md has the risk); a lock with its own keypad is
--- what retires this rule.
-hl.layer_rule({
-  match = { namespace = "^omarchy-phone-keyboard$" },
-  above_lock = 2,
-})
