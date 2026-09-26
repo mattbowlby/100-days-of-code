@@ -8,6 +8,7 @@ pragma ComponentBehavior: Bound
 
 import QtQuick
 import Quickshell
+import Quickshell.Hyprland
 import Quickshell.Wayland
 import qs.Commons
 
@@ -49,6 +50,8 @@ Item {
   // right section carries seven widgets: more than 360 logical px has room for.
   readonly property var defaultStatusEntries: [
     { id: "dev.omarchyphone.keyboard" },
+    { id: "omarchy.audio" },
+    { id: "omarchy.monitor" },
     { id: "omarchy.bluetooth" },
     { id: "omarchy.network" },
     { id: "omarchy.power" }
@@ -80,9 +83,11 @@ Item {
     widgetItems = next
   }
 
-  function unregisterWidgetItem(widgetId) {
+  // Only if the entry is still this item: with a second screen there are two
+  // bars, and one being destroyed must not drop the other's live widget.
+  function unregisterWidgetItem(widgetId, item) {
     var id = String(widgetId || "")
-    if (!widgetItems[id]) return
+    if (!widgetItems[id] || widgetItems[id] !== item) return
     var next = ({})
     for (var key in widgetItems) if (key !== id) next[key] = widgetItems[key]
     widgetItems = next
@@ -231,20 +236,25 @@ Item {
   // longer takes the old "workspace empty" form -- its arguments are Lua now --
   // hence eval (NOTES.md).
   //
-  // Only from a workspace that has windows. "empty" resolves to the lowest
-  // empty workspace anywhere, not the current one, so swiping up while already
-  // home on workspace 5 would otherwise slide over to an emptier-numbered 3.
+  // From an app: to an empty workspace, and the home screen is on the page it
+  // was left on. Already home: the pager goes back to its first page, as a
+  // second press of an iPhone's home button does. Which case it is comes from
+  // Quickshell's own view of Hyprland, as upstream's workspace widget reads it.
   //
-  // Summoning the home plugin as well sends its pager to the first page. That
-  // happens on every swipe, from an app too, which is one step short of iOS
-  // (it returns to the page you left); the shell cannot tell from here which
-  // case it is in, because the Lua above runs out of process.
+  // The Lua checks again rather than trusting that view: "empty" resolves to
+  // the lowest empty workspace anywhere, not the current one, so dispatching
+  // from an already-empty workspace 5 would slide over to an emptier-numbered 3.
   readonly property string goHomeLua:
     "local w = hl.get_active_workspace(); "
     + "if w and w.windows > 0 then hl.dispatch(hl.dsp.focus({ workspace = \"empty\" })) end"
 
   function goHome() {
-    Quickshell.execDetached(["hyprctl", "eval", goHomeLua])
+    var workspace = Hyprland.focusedWorkspace
+    var home = !!workspace && workspace.toplevels.values.length === 0
+    if (!home) {
+      Quickshell.execDetached(["hyprctl", "eval", goHomeLua])
+      return
+    }
     if (shell && typeof shell.summon === "function") shell.summon(homeId, "")
   }
 
@@ -330,7 +340,8 @@ Item {
   property bool controlOpen: false
 
   // Panels open the upstream panel through summonBarWidget(), which needs the
-  // widget loaded in the status row, so a tile shows only while its widget is.
+  // widget loaded in the status row, so a tile shows only while its widget is
+  // -- which is why audio and monitor are in the default row above.
   // Actions run a command; every one is an existing Omarchy tool.
   //
   // Glyphs are Nerd Font codepoints on the default family, written as escapes
@@ -338,22 +349,26 @@ Item {
   // volume, f240 battery, f108 display, f023 lock, f030 camera, f186 moon,
   // f0f4 cup.
   readonly property var controlTiles: [
-    { panel: "omarchy.network",   icon: "", label: "Network" },
-    { panel: "omarchy.bluetooth", icon: "", label: "Bluetooth" },
-    { panel: "omarchy.audio",     icon: "", label: "Sound" },
-    { panel: "omarchy.power",     icon: "", label: "Battery" },
-    { panel: "omarchy.monitor",   icon: "", label: "Display" },
-    { command: ["omarchy-system-lock"],                               icon: "", label: "Lock" },
-    { command: ["omarchy-capture-screenshot", "fullscreen", "save"],  icon: "", label: "Screenshot" },
-    { command: ["omarchy-toggle-nightlight"],                         icon: "", label: "Night Light" },
-    { command: ["omarchy-toggle-idle"],                               icon: "", label: "Stay Awake" }
+    { panel: "omarchy.network",   icon: "\uf1eb", label: "Network" },
+    { panel: "omarchy.bluetooth", icon: "\uf293", label: "Bluetooth" },
+    { panel: "omarchy.audio",     icon: "\uf028", label: "Sound" },
+    { panel: "omarchy.power",     icon: "\uf240", label: "Battery" },
+    { panel: "omarchy.monitor",   icon: "\uf108", label: "Display" },
+    { command: ["omarchy-system-lock"],                               icon: "\uf023", label: "Lock" },
+    { command: ["omarchy-capture-screenshot", "fullscreen", "save"],  icon: "\uf030", label: "Screenshot" },
+    { command: ["omarchy-toggle-nightlight"],                         icon: "\uf186", label: "Night Light" },
+    { command: ["omarchy-toggle-idle"],                               icon: "\uf0f4", label: "Stay Awake" }
   ]
 
   readonly property var visibleControlTiles: {
     var out = []
     for (var i = 0; i < controlTiles.length; i++) {
       var tile = controlTiles[i]
-      if (tile.panel && !widgetItems[tile.panel]) continue
+      // Registered is not enough: a widget hides itself when its hardware is
+      // absent (bluetooth with no adapter, power with no battery), and a tile
+      // would then open a popup anchored to an item nothing is placing.
+      var widget = tile.panel ? widgetItems[tile.panel] : null
+      if (tile.panel && !(widget && widget.visible)) continue
       out.push(tile)
     }
     return out
@@ -389,7 +404,9 @@ Item {
       root.pendingTile = null
       if (!tile) return
       if (tile.panel) root.summonBarWidget(tile.panel)
-      else if (tile.command) Quickshell.execDetached(tile.command)
+      // Through a login shell, as upstream's own launches are: the capture tool
+      // needs the session environment a bare exec does not carry.
+      else if (tile.command) Util.execArgv(tile.command)
     }
   }
 
@@ -398,20 +415,24 @@ Item {
   component ControlCentre: PanelWindow {
     id: sheetWindow
 
-    // Tiles use the home screen's proportions: four across, a rounded square
-    // at 0.27 of its side, glyph at 0.45. The size is worked out from the width
-    // so four always fit, whatever the theme's font scale does.
+    // Tiles are the home screen's shape -- a rounded square at 0.27 of its
+    // side, the same frosted plate -- four across, with a glyph at 0.45 of the
+    // side where the home screen has an app icon. The size is worked out from
+    // the card's inner width so four always fit, whatever the theme's font
+    // scale does; the card is then sized from the grid, so its padding is even
+    // on all four sides.
     readonly property int pad: Style.spacing.xxl
     readonly property int gap: Style.spacing.lg
-    readonly property int tileSize: Math.min(Style.space(64),
-      Math.floor((Math.min(width, Style.space(420)) - pad * 2 - gap * 3) / 4))
+    readonly property int tileSize: Math.max(0, Math.min(Style.space(64),
+      Math.floor((Math.min(width - gap * 2, Style.space(420)) - pad * 2 - gap * 3) / 4)))
 
     visible: root.controlOpen
     anchors { top: true; bottom: true; left: true; right: true }
     color: "transparent"
 
     WlrLayershell.namespace: "omarchy-phone-control"
-    // Overlay: above the edge strips and any Top-layer panel it replaces.
+    // Overlay: above any Top-layer panel. The edge strips are on Overlay too,
+    // and hide themselves while this is up, so there is no order to rely on.
     WlrLayershell.layer: WlrLayer.Overlay
     WlrLayershell.keyboardFocus: WlrKeyboardFocus.None
     exclusionMode: ExclusionMode.Ignore
@@ -420,8 +441,11 @@ Item {
     // whole screen behind the card is dimmed with the theme's background, and
     // being over the blur rule's ignore_alpha, frosted as well: what is behind
     // recedes, as it does under iOS's control centre.
+    // The bar's own strip is left uncovered, as iOS leaves its status bar.
     Rectangle {
       anchors.fill: parent
+      anchors.topMargin: root.position === "bottom" ? 0 : root.barSize
+      anchors.bottomMargin: root.position === "bottom" ? root.barSize : 0
       color: Util.alpha(Color.background, 0.35)
 
       MouseArea {
@@ -436,7 +460,7 @@ Item {
       anchors.horizontalCenter: parent.horizontalCenter
       anchors.top: parent.top
       anchors.topMargin: (root.position === "bottom" ? 0 : root.barSize) + sheetWindow.gap
-      width: Math.min(parent.width - sheetWindow.gap * 2, Style.space(420))
+      width: tileGrid.width + sheetWindow.pad * 2
       height: tileGrid.height + sheetWindow.pad * 2
       radius: Math.round(sheetWindow.tileSize * 0.27) + sheetWindow.pad / 2
       color: Util.alpha(Color.background, 0.45)
@@ -497,7 +521,9 @@ Item {
 
               anchors.top: controlPlate.bottom
               anchors.topMargin: Style.spacing.xs
-              width: parent.width
+              // The gap to each neighbour is borrowed, so "Night Light" fits.
+              anchors.horizontalCenter: parent.horizontalCenter
+              width: parent.width + sheetWindow.gap
               text: controlTile.modelData.label
               color: Color.foreground
               font.family: Style.font.family
@@ -675,7 +701,7 @@ Item {
             root.registerWidgetItem(widgetId, item)
           }
 
-          Component.onDestruction: root.unregisterWidgetItem(widgetId)
+          Component.onDestruction: root.unregisterWidgetItem(widgetId, item)
         }
       }
     }
