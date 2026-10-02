@@ -44,7 +44,14 @@ class DriveService : CarAppService() {
 }
 
 class DriveSession : Session() {
-    override fun onCreateScreen(intent: Intent): Screen = DashboardScreen(carContext)
+    private var screen: DashboardScreen? = null
+
+    override fun onCreateScreen(intent: Intent): Screen = DashboardScreen(carContext).also { screen = it }
+
+    // Day turning to night (headlights on) and back.
+    override fun onCarConfigurationChanged(newConfiguration: android.content.res.Configuration) {
+        screen?.redraw()
+    }
 }
 
 // The dashboard: drawn onto the car's screen surface, with an action strip of
@@ -56,7 +63,12 @@ class DashboardScreen(carContext: CarContext) : Screen(carContext), DefaultLifec
     private val nowPlaying = NowPlaying(carContext) { redrawAndRefreshButtons() }
 
     private var surface: SurfaceContainer? = null
+    // Laid out in the stable area -- what stays clear of Android Auto's own
+    // UI even while it shows and hides its buttons -- so the dashboard does
+    // not jump each time they come and go. The visible area only where a
+    // host reports no stable one (Car API level 1).
     private var visible = Rect()
+    private var stable = Rect()
     private var lastPlaying: Boolean? = null
 
     // Once a minute is enough for a clock without seconds; aligned to the
@@ -76,6 +88,11 @@ class DashboardScreen(carContext: CarContext) : Screen(carContext), DefaultLifec
 
         override fun onVisibleAreaChanged(visibleArea: Rect) {
             visible = Rect(visibleArea)
+            if (stable.isEmpty) draw()
+        }
+
+        override fun onStableAreaChanged(stableArea: Rect) {
+            stable = Rect(stableArea)
             draw()
         }
 
@@ -84,9 +101,22 @@ class DashboardScreen(carContext: CarContext) : Screen(carContext), DefaultLifec
         }
     }
 
+    // The phone's time or time zone set by hand: redraw now, and line the
+    // minute tick up again.
+    private val clockChanged = object : android.content.BroadcastReceiver() {
+        override fun onReceive(context: android.content.Context, intent: Intent) {
+            main.removeCallbacks(tick)
+            main.post(tick)
+        }
+    }
+
     init {
         lifecycle.addObserver(this)
+        // A theme picked on the phone's home screen shows here too.
+        settings.addListener { draw() }
     }
+
+    fun redraw() = draw()
 
     override fun onCreate(owner: LifecycleOwner) {
         carContext.getCarService(AppManager::class.java).setSurfaceCallback(surfaceCallback)
@@ -95,11 +125,28 @@ class DashboardScreen(carContext: CarContext) : Screen(carContext), DefaultLifec
     override fun onStart(owner: LifecycleOwner) {
         nowPlaying.start()
         main.post(tick)
+        val filter = android.content.IntentFilter().apply {
+            addAction(Intent.ACTION_TIME_CHANGED)
+            addAction(Intent.ACTION_TIMEZONE_CHANGED)
+        }
+        runCatching { carContext.registerReceiver(clockChanged, filter, android.content.Context.RECEIVER_NOT_EXPORTED) }
     }
 
     override fun onStop(owner: LifecycleOwner) {
+        runCatching { carContext.unregisterReceiver(clockChanged) }
         main.removeCallbacks(tick)
         nowPlaying.stop()
+    }
+
+    override fun onDestroy(owner: LifecycleOwner) {
+        carContext.getCarService(AppManager::class.java).setSurfaceCallback(null)
+        settings.close()
+    }
+
+    // At night (the car's headlights on) a light theme would glare: the
+    // default dark one stands in for it until morning.
+    private fun drawnTheme() = themeById(settings.themeId).let { theme ->
+        if (carContext.isDarkMode && !theme.dark) themeById(null) else theme
     }
 
     override fun onGetTemplate(): Template {
@@ -148,9 +195,9 @@ class DashboardScreen(carContext: CarContext) : Screen(carContext), DefaultLifec
         val canvas = runCatching { target.lockCanvas(null) }.getOrNull() ?: return
         try {
             Dashboard.draw(
-                canvas, container.width, container.height, visible,
+                canvas, container.width, container.height, if (stable.isEmpty) visible else stable,
                 DashboardState(
-                    theme = themeById(settings.themeId),
+                    theme = drawnTheme(),
                     now = Date(),
                     use24Hour = DateFormat.is24HourFormat(carContext),
                     title = nowPlaying.title,

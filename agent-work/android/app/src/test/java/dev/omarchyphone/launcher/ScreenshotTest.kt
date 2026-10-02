@@ -156,13 +156,28 @@ class ScreenshotTest {
         // phone-shaped.
         val name = if (playing) "drivePlaying" else "driveNoAccess"
         val out = java.io.File("src/test/snapshots/images/dev.omarchyphone.launcher_ScreenshotTest_$name.png")
-        out.parentFile.mkdirs()
+        out.parentFile?.mkdirs()
         java.io.FileOutputStream(out).use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }
     }
 
     @Test fun drivePlaying() = drive(playing = true, allowed = true)
 
     @Test fun driveNoAccess() = drive(playing = false, allowed = false)
+
+    // A portrait car screen (Volvo's 9-inch), the clock above the card.
+    @Test
+    fun drivePortrait() {
+        val bitmap = Bitmap.createBitmap(768, 1024, Bitmap.Config.ARGB_8888)
+        dev.omarchyphone.launcher.drive.Dashboard.draw(
+            android.graphics.Canvas(bitmap), 768, 1024, android.graphics.Rect(0, 0, 768, 900),
+            dev.omarchyphone.launcher.drive.DashboardState(
+                theme = themeById("tokyo-night"), now = java.util.GregorianCalendar(2026, 9, 2, 9, 41).time,
+                use24Hour = false, title = "Midnight City", artist = "M83", playing = true, mediaAllowed = true,
+            ),
+        )
+        val out = java.io.File("src/test/snapshots/images/dev.omarchyphone.launcher_ScreenshotTest_drivePortrait.png")
+        java.io.FileOutputStream(out).use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }
+    }
 
     @Test
     fun themePicker() {

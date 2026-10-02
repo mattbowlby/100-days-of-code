@@ -93,6 +93,7 @@ class HomeActivity : ComponentActivity() {
 
     override fun onDestroy() {
         repository.close()
+        settings.close()
         super.onDestroy()
     }
 

@@ -27,6 +27,32 @@ class LauncherSettings(private val context: Context) {
     var dockKeys by mutableStateOf(prefs?.getString(KEY_DOCK, null)?.let { decode(it) })
         private set
 
+    // The home screen and the car's dashboard each keep one of these, in the
+    // same process: a change made by either is picked up by the other at
+    // once. Held here, as the preferences hold their listeners weakly.
+    private val listeners = mutableListOf<() -> Unit>()
+    private val prefsListener = android.content.SharedPreferences.OnSharedPreferenceChangeListener { p, key ->
+        when (key) {
+            KEY_THEME -> themeId = p.getString(KEY_THEME, null) ?: "tokyo-night"
+            KEY_DOCK -> dockKeys = p.getString(KEY_DOCK, null)?.let { decode(it) }
+            else -> return@OnSharedPreferenceChangeListener
+        }
+        listeners.forEach { it() }
+    }
+
+    init {
+        prefs?.registerOnSharedPreferenceChangeListener(prefsListener)
+    }
+
+    fun addListener(listener: () -> Unit) {
+        listeners += listener
+    }
+
+    fun close() {
+        listeners.clear()
+        prefs?.unregisterOnSharedPreferenceChangeListener(prefsListener)
+    }
+
     fun setTheme(id: String) {
         themeId = id
         prefs?.edit()?.putString(KEY_THEME, id)?.apply()

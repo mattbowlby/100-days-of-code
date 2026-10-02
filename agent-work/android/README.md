@@ -62,7 +62,8 @@ app list. It shows:
 
 - the time, large, and the date, in your Omarchy theme;
 - what is playing in any music app, with play/pause and next-track buttons;
-- a button that switches to the next Omarchy theme (on the phone too).
+- a button that switches to the next Omarchy theme (on the phone too). At
+  night a light theme gives way to a dark one, so it does not glare.
 
 Android Auto's own frame -- its app bar and launcher -- stays Google's: Android
 Auto lets apps fill in their own screen, not restyle Android Auto itself, and
@@ -76,10 +77,12 @@ listed as one (it shows no map).
    tap **Version** ten times, until it offers developer settings; allow them.
    Then the three-dot menu > **Developer settings** > turn on **Unknown
    sources**.
-2. **Let it see what is playing.** Settings > Notifications > Advanced
-   settings > **Device and app notifications** (on some phones: "Notification
-   access") > turn on **Omarchy Home**. It reads no notifications, only which
-   song is playing.
+2. **Let it see what is playing.** Android protects this setting for apps
+   installed from a file, so first: Settings > Apps > **Omarchy Home** > the
+   three-dot menu (top right) > **Allow restricted settings**. Then Settings >
+   Notifications > Advanced settings > **Device and app notifications** (on
+   some phones: "Notification access") > turn on **Omarchy Home**. It reads
+   no notifications, only which song is playing.
 3. In the car, open the app list on the car's screen and tap **Omarchy Home**.
 
 ![Omarchy Drive](../previews/android-drivePlaying.png)
