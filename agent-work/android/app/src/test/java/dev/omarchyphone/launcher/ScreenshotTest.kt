@@ -135,6 +135,35 @@ class ScreenshotTest {
         }
     }
 
+    // Omarchy Drive's dashboard as a car's screen shows it: 1280x480 (a wide
+    // in-dash display), the area Android Auto leaves visible inset for its
+    // own bars on the left.
+    private fun drive(playing: Boolean, allowed: Boolean) {
+        val bitmap = Bitmap.createBitmap(1280, 480, Bitmap.Config.ARGB_8888)
+        dev.omarchyphone.launcher.drive.Dashboard.draw(
+            android.graphics.Canvas(bitmap), 1280, 480, android.graphics.Rect(96, 0, 1180, 480),
+            dev.omarchyphone.launcher.drive.DashboardState(
+                theme = themeById("tokyo-night"),
+                now = java.util.GregorianCalendar(2026, 9, 2, 9, 41).time,
+                use24Hour = true,
+                title = "Midnight City",
+                artist = "M83",
+                playing = playing,
+                mediaAllowed = allowed,
+            ),
+        )
+        // Saved as drawn, at the car screen's own size: Paparazzi's frames are
+        // phone-shaped.
+        val name = if (playing) "drivePlaying" else "driveNoAccess"
+        val out = java.io.File("src/test/snapshots/images/dev.omarchyphone.launcher_ScreenshotTest_$name.png")
+        out.parentFile.mkdirs()
+        java.io.FileOutputStream(out).use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }
+    }
+
+    @Test fun drivePlaying() = drive(playing = true, allowed = true)
+
+    @Test fun driveNoAccess() = drive(playing = false, allowed = false)
+
     @Test
     fun themePicker() {
         paparazzi.snapshot {

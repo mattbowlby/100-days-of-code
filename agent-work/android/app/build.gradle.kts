@@ -71,5 +71,7 @@ dependencies {
     implementation("androidx.compose.material:material-icons-extended:1.7.8")
     implementation("androidx.activity:activity-compose:1.12.4")
     implementation("androidx.core:core-ktx:1.17.0")
+    // Android Auto: Omarchy Drive, the car-screen dashboard.
+    implementation("androidx.car.app:app:1.7.0")
     testImplementation("junit:junit:4.13.2")
 }

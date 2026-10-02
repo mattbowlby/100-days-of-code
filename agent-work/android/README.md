@@ -52,6 +52,38 @@ To go back to Samsung's own home screen, choose **One UI Home** there.
 
 The dock starts with your phone, messages, browser and camera apps.
 
+## Omarchy Drive: in the car
+
+The same app also puts an Omarchy dashboard on your car's own screen through
+**Android Auto**, the Android version of CarPlay, which Mazda, Hyundai and
+Volvo (and most other makers) support. Plug the phone in (or connect
+wirelessly, where the car can) and open **Omarchy Home** from Android Auto's
+app list. It shows:
+
+- the time, large, and the date, in your Omarchy theme;
+- what is playing in any music app, with play/pause and next-track buttons;
+- a button that switches to the next Omarchy theme (on the phone too).
+
+Android Auto's own frame -- its app bar and launcher -- stays Google's: Android
+Auto lets apps fill in their own screen, not restyle Android Auto itself, and
+it only lets navigation apps draw their screen freely, so Omarchy Drive is
+listed as one (it shows no map).
+
+**Setting it up, once:**
+
+1. **Let Android Auto show apps that are not from the Play Store.** On the
+   phone: Settings > search "Android Auto" > open it. Scroll to the bottom and
+   tap **Version** ten times, until it offers developer settings; allow them.
+   Then the three-dot menu > **Developer settings** > turn on **Unknown
+   sources**.
+2. **Let it see what is playing.** Settings > Notifications > Advanced
+   settings > **Device and app notifications** (on some phones: "Notification
+   access") > turn on **Omarchy Home**. It reads no notifications, only which
+   song is playing.
+3. In the car, open the app list on the car's screen and tap **Omarchy Home**.
+
+![Omarchy Drive](../previews/android-drivePlaying.png)
+
 ## Building it
 
 With the Android SDK (platform 36) and JDK 17 or later:
